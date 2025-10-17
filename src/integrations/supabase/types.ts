@@ -14,6 +14,164 @@ export type Database = {
   }
   public: {
     Tables: {
+      backtest_results: {
+        Row: {
+          created_at: string
+          end_date: string
+          id: string
+          losing_trades: number
+          max_drawdown: number
+          return_percentage: number
+          sharpe_ratio: number | null
+          start_date: string
+          strategy_id: string
+          symbol: string
+          total_profit_loss: number
+          total_trades: number
+          win_rate: number
+          winning_trades: number
+        }
+        Insert: {
+          created_at?: string
+          end_date: string
+          id?: string
+          losing_trades: number
+          max_drawdown: number
+          return_percentage: number
+          sharpe_ratio?: number | null
+          start_date: string
+          strategy_id: string
+          symbol: string
+          total_profit_loss: number
+          total_trades: number
+          win_rate: number
+          winning_trades: number
+        }
+        Update: {
+          created_at?: string
+          end_date?: string
+          id?: string
+          losing_trades?: number
+          max_drawdown?: number
+          return_percentage?: number
+          sharpe_ratio?: number | null
+          start_date?: string
+          strategy_id?: string
+          symbol?: string
+          total_profit_loss?: number
+          total_trades?: number
+          win_rate?: number
+          winning_trades?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backtest_results_strategy_id_fkey"
+            columns: ["strategy_id"]
+            isOneToOne: false
+            referencedRelation: "backtest_strategies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      backtest_strategies: {
+        Row: {
+          buy_condition: string
+          created_at: string
+          description: string | null
+          id: string
+          initial_capital: number
+          name: string
+          sell_condition: string
+        }
+        Insert: {
+          buy_condition: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          initial_capital?: number
+          name: string
+          sell_condition: string
+        }
+        Update: {
+          buy_condition?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          initial_capital?: number
+          name?: string
+          sell_condition?: string
+        }
+        Relationships: []
+      }
+      paper_portfolio: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          purchase_date: string
+          purchase_price: number
+          quantity: number
+          symbol: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          purchase_date?: string
+          purchase_price: number
+          quantity: number
+          symbol: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          purchase_date?: string
+          purchase_price?: number
+          quantity?: number
+          symbol?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      paper_trades: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          price: number
+          profit_loss: number | null
+          quantity: number
+          symbol: string
+          total_value: number
+          trade_date: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          price: number
+          profit_loss?: number | null
+          quantity: number
+          symbol: string
+          total_value: number
+          trade_date?: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          price?: number
+          profit_loss?: number | null
+          quantity?: number
+          symbol?: string
+          total_value?: number
+          trade_date?: string
+        }
+        Relationships: []
+      }
       portfolio: {
         Row: {
           created_at: string
