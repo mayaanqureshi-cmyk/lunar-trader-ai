@@ -32,7 +32,18 @@ serve(async (req) => {
       console.log('Yahoo Finance gainers response:', JSON.stringify(data, null, 2));
       const quotes = data.finance.result[0].quotes;
 
-      const formattedData = quotes.slice(0, 5).map((quote: any) => {
+      // Filter to only show regular stocks (no options, warrants, or derivatives)
+      const regularStocks = quotes.filter((quote: any) => {
+        const symbol = quote.symbol;
+        // Only allow pure letter symbols (A-Z), which are regular stocks
+        // This excludes:
+        // - Options (contain numbers like AAPL240119C00150000)
+        // - Warrants (contain .WS, -WT, etc.)
+        // - Special securities (contain -, ., ^, numbers)
+        return /^[A-Z]+$/.test(symbol);
+      });
+
+      const formattedData = regularStocks.slice(0, 5).map((quote: any) => {
         // Handle different possible data formats from Yahoo Finance
         const price = typeof quote.regularMarketPrice === 'number' 
           ? quote.regularMarketPrice 
