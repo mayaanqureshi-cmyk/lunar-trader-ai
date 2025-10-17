@@ -16,40 +16,55 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY not configured");
     }
 
-    const prompt = `As an expert swing trading analyst, recommend 3-5 stocks for each timeframe with focus on QUICK GAINS through momentum and technical setups:
+    const prompt = `As an expert swing trading analyst specializing in CATALYST-DRIVEN opportunities, recommend 3-5 stocks for each timeframe. Focus on companies with STRONG FUNDAMENTALS + POSITIVE CATALYSTS (like Intel/AMD deals, partnerships, tech breakthroughs):
 
-1. TODAY (Intraday Momentum): High volume breakouts, strong intraday momentum, immediate catalysts (earnings, news, sector rotation). Look for 2-5% quick moves.
+1. TODAY (Immediate Catalyst Plays):
+   - Breaking news: M&A deals, strategic partnerships, major contract wins
+   - Earnings surprises beating expectations
+   - Analyst upgrades from major firms (Goldman, Morgan Stanley, etc.)
+   - Sector rotation into undervalued areas
+   - Target: 3-8% quick gains
 
-2. ONE WEEK (Swing Trade Setup): 
-   - Technical breakouts from consolidation patterns (bull flags, ascending triangles, cup & handle)
-   - Stocks approaching key resistance with strong momentum
-   - Recent positive catalysts (earnings beats, analyst upgrades, contract wins)
-   - RSI between 50-70 (momentum but not overbought)
-   - Volume increasing on up days
-   - Target 5-15% gains
+2. ONE WEEK (Swing Setup with Near-Term Catalysts):
+   - Companies announcing partnerships/collaborations in next 1-2 weeks
+   - Technical breakouts backed by fundamental strength (P/E improving, revenue growth)
+   - Undervalued stocks in hot sectors (AI, semiconductors, cloud, biotech)
+   - Recent insider buying activity
+   - Positive earnings guidance or product launches upcoming
+   - Strong balance sheets with growth potential
+   - Target: 8-20% gains
 
-3. ONE MONTH (Position Swing):
-   - Strong uptrends with pullbacks to support (buy the dip opportunities)
-   - Stocks with upcoming catalysts (product launches, FDA approvals, earnings)
-   - Sector rotation plays (identify trending sectors)
-   - Moving above key moving averages (50-day, 200-day crosses)
-   - Fundamental strength backing technical setup
-   - Target 15-30% gains
+3. ONE MONTH (High-Conviction Fundamental Plays):
+   - Companies with major deals/partnerships recently announced (like Intel/AMD opportunities)
+   - Industry leaders with competitive moats being undervalued
+   - Upcoming FDA approvals, product launches, or earnings
+   - Sector tailwinds (AI adoption, chip demand, EV growth, etc.)
+   - Strong revenue/earnings growth trajectory
+   - Recent strategic moves (acquisitions, expansions, new markets)
+   - Institutional accumulation patterns
+   - Target: 20-40% gains
 
-CRITICAL CRITERIA FOR ALL RECOMMENDATIONS:
-- Recent positive price action and momentum
-- High relative strength vs market
-- Increasing institutional buying
-- Clear entry/exit levels
-- Realistic profit targets
-- Specific catalyst or technical reason for move
+CRITICAL SELECTION CRITERIA:
+✓ Solid fundamentals: Positive revenue growth, manageable debt, strong margins
+✓ Recent positive catalyst: Deal announcement, partnership, breakthrough, upgrade
+✓ Technical confirmation: Price breaking resistance or bouncing off support
+✓ Sector strength: Operating in growing industry with tailwinds
+✓ Value opportunity: Undervalued relative to growth potential or peers
+✓ Institutional interest: Smart money accumulating shares
+
+PRIORITIZE:
+- Companies with recent major announcements (partnerships, deals, contracts)
+- Undervalued relative to sector peers but with strong growth
+- Clear competitive advantages or technological edge
+- Momentum building from positive fundamentals
+- Real catalysts (not just technical patterns)
 
 For each stock provide:
-- Symbol (real NYSE/NASDAQ symbols only)
-- Company name  
-- Current price estimate (realistic based on recent trading)
-- Recommendation reason (specific technical setup or catalyst, 25 words max)
-- Risk level (low/medium/high based on volatility and setup quality)`;
+- Symbol (real NYSE/NASDAQ symbols - actively traded, liquid)
+- Company name
+- Current realistic price (based on recent trading range)
+- Recommendation reason: MUST include specific catalyst or fundamental driver (e.g., "Recent $5B partnership with Microsoft", "Trading at 0.8x sales vs sector 2.5x with 40% revenue growth")
+- Risk level (low/medium/high - consider volatility, market cap, catalyst certainty)`;
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
