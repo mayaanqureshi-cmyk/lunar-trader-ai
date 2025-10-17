@@ -63,14 +63,13 @@ export default {
           5: "hsl(var(--chart-5))",
         },
       },
-      backgroundImage: {
-        'gradient-primary': 'var(--gradient-primary)',
-        'gradient-success': 'var(--gradient-success)',
-        'gradient-danger': 'var(--gradient-danger)',
+      fontFamily: {
+        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', 'sans-serif'],
       },
       boxShadow: {
-        'glow': 'var(--shadow-glow)',
+        'subtle': 'var(--shadow-subtle)',
         'card': 'var(--shadow-card)',
+        'elevated': 'var(--shadow-elevated)',
       },
       borderRadius: {
         lg: "var(--radius)",

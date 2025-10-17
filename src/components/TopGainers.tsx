@@ -46,17 +46,17 @@ export const TopGainers = () => {
     return recommendations.find(r => r.symbol === symbol);
   };
   return (
-    <Card className="p-6 bg-card border-border shadow-card">
+    <Card className="p-6 bg-card border border-border shadow-card">
       <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <TrendingUp className="h-5 w-5 text-success" />
-          <h2 className="text-lg font-bold text-foreground">Top Daily Gainers</h2>
+          <h2 className="text-lg font-semibold text-foreground">Top Daily Gainers</h2>
         </div>
         <Button 
           variant="ghost" 
           size="sm" 
           onClick={refetch}
-          className="text-muted-foreground hover:text-foreground"
+          className="text-muted-foreground hover:text-foreground hover:bg-secondary"
         >
           <RefreshCw className="h-4 w-4" />
         </Button>
@@ -75,26 +75,26 @@ export const TopGainers = () => {
             return (
               <div 
                 key={stock.symbol}
-                className="flex items-center justify-between p-4 rounded-lg bg-secondary/50 hover:bg-secondary transition-all duration-200"
+                className="flex items-center justify-between p-4 rounded-lg border border-border bg-card hover:bg-secondary/50 transition-colors duration-150"
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-8 h-8 rounded-full bg-gradient-success flex items-center justify-center text-success-foreground font-bold text-sm">
+                  <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground font-medium text-sm">
                     {index + 1}
                   </div>
                   <div>
-                    <p className="font-bold text-foreground">{stock.symbol}</p>
+                    <p className="font-semibold text-foreground">{stock.symbol}</p>
                     <p className="text-xs text-muted-foreground">{stock.name}</p>
                   </div>
                 </div>
                 
                 <div className="text-right">
-                  <p className="font-bold text-foreground">{stock.price}</p>
+                  <p className="font-semibold text-foreground">{stock.price}</p>
                   <p className="text-sm font-medium text-success">{stock.change}</p>
                 </div>
                 
                 <div className="text-right">
                   <p className="text-xs text-muted-foreground">Volume</p>
-                  <p className="text-sm text-foreground">{stock.volume}</p>
+                  <p className="text-sm font-medium text-foreground">{stock.volume}</p>
                 </div>
 
                 <div className="flex flex-col items-end gap-1 min-w-[140px]">
@@ -104,7 +104,7 @@ export const TopGainers = () => {
                     <>
                       <Badge 
                         variant={rec.recommendation === "BUY" ? "default" : "secondary"}
-                        className={rec.recommendation === "BUY" ? "bg-success text-success-foreground" : ""}
+                        className={rec.recommendation === "BUY" ? "bg-primary text-primary-foreground font-medium" : "font-medium"}
                       >
                         {rec.recommendation}
                       </Badge>

@@ -12,7 +12,6 @@ import { AIInsights } from "@/components/AIInsights";
 import { ProfitTracker } from "@/components/ProfitTracker";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { DollarSign, TrendingUp, Target, Activity } from "lucide-react";
-import heroBg from "@/assets/hero-bg.jpg";
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -42,22 +41,18 @@ const Index = () => {
       <Header />
       
       {/* Hero Section */}
-      <div 
-        className="relative h-64 bg-cover bg-center mb-8"
-        style={{ backgroundImage: `url(${heroBg})` }}
-      >
-        <div className="absolute inset-0 bg-gradient-to-r from-background/95 via-background/80 to-background/60" />
-        <div className="relative container mx-auto px-6 h-full flex flex-col justify-center">
-          <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
-            AI-Powered Trading Intelligence
+      <div className="border-b border-border bg-gradient-to-b from-secondary/30 to-background">
+        <div className="container mx-auto px-6 py-20">
+          <h1 className="text-5xl md:text-6xl font-semibold text-foreground mb-4 tracking-tight">
+            Trading Intelligence
           </h1>
-          <p className="text-lg text-muted-foreground max-w-2xl">
-            Track top performers, analyze market sentiment, and receive AI-generated trading signals for optimized profit generation.
+          <p className="text-xl text-muted-foreground max-w-2xl font-light">
+            Track market performers and receive intelligent trading signals.
           </p>
         </div>
       </div>
 
-      <div className="container mx-auto px-6 pb-12">
+      <div className="container mx-auto px-6 py-12">
         {/* Key Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <MetricsCard
