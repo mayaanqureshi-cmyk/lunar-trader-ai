@@ -32,26 +32,34 @@ export const AddToPortfolio = ({ onAdd }: AddToPortfolioProps) => {
         body: { text: input }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error("Parse error:", error);
+        throw new Error("Failed to parse input");
+      }
       if (!data) throw new Error("No data returned");
+
+      console.log("Parsed stock data:", data);
 
       await onAdd({
         symbol: data.symbol,
         name: data.name,
         purchase_price: data.purchase_price,
-        quantity: data.quantity,
+        quantity: Number(data.quantity),
       });
 
       setInput("");
       toast({
         title: "Stock added",
-        description: `Added ${data.quantity} shares of ${data.symbol}`,
+        description: `Added ${data.quantity} shares of ${data.symbol} at $${data.purchase_price}`,
       });
     } catch (error) {
-      console.error("Error parsing stock input:", error);
+      console.error("Error adding stock:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
       toast({
         title: "Error",
-        description: "Could not parse your input. Try: 'bought 10 AAPL at 150'",
+        description: errorMessage.includes("parse") 
+          ? "Could not parse your input. Try: 'bought 10 AAPL at 150'"
+          : "Failed to add stock to portfolio. Please try again.",
         variant: "destructive",
       });
     } finally {
