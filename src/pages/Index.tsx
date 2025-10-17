@@ -1,6 +1,7 @@
 import { Header } from "@/components/Header";
 import { MetricsCard } from "@/components/MetricsCard";
 import { TopGainers } from "@/components/TopGainers";
+import { WeeklyGainers } from "@/components/WeeklyGainers";
 import { SentimentAnalysis } from "@/components/SentimentAnalysis";
 import { TradingSignals } from "@/components/TradingSignals";
 import { PerformanceChart } from "@/components/PerformanceChart";
@@ -8,11 +9,13 @@ import { AddToPortfolio } from "@/components/AddToPortfolio";
 import { PortfolioList } from "@/components/PortfolioList";
 import { TradingNotifications } from "@/components/TradingNotifications";
 import { AIInsights } from "@/components/AIInsights";
+import { ProfitTracker } from "@/components/ProfitTracker";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { DollarSign, TrendingUp, Target, Activity } from "lucide-react";
 import heroBg from "@/assets/hero-bg.jpg";
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const Index = () => {
   const { portfolio, signals, isLoading, addToPortfolio, removeFromPortfolio, markSignalAsRead } = usePortfolio();
@@ -113,16 +116,30 @@ const Index = () => {
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           <div className="lg:col-span-2">
-            <PerformanceChart />
+            <Tabs defaultValue="daily" className="w-full">
+              <TabsList className="grid w-full grid-cols-2 mb-6">
+                <TabsTrigger value="daily">Daily Gainers</TabsTrigger>
+                <TabsTrigger value="weekly">Weekly Opportunities</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="daily">
+                <TopGainers />
+              </TabsContent>
+              
+              <TabsContent value="weekly">
+                <WeeklyGainers />
+              </TabsContent>
+            </Tabs>
           </div>
+          
           <div>
-            <TradingSignals />
+            <ProfitTracker />
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <TopGainers />
           <SentimentAnalysis />
+          <TradingSignals />
         </div>
       </div>
     </div>
