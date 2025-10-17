@@ -5,3 +5,9 @@ verify_jwt = false
 
 [functions.recommend-stocks]
 verify_jwt = false
+
+[functions.fetch-stock-news]
+verify_jwt = false
+
+[functions.run-backtest]
+verify_jwt = false
