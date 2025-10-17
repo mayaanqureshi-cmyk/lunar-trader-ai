@@ -48,16 +48,19 @@ export const PortfolioList = ({ portfolio, isLoading, onRemove }: PortfolioListP
       if (data?.data && Array.isArray(data.data)) {
         const enriched = portfolio.map(stock => {
           const quote = data.data.find((q: any) => q.symbol === stock.symbol);
-          if (quote && quote.price) {
-            const currentPrice = parseFloat(quote.price);
+          if (quote) {
+            // Use raw price values for maximum precision
+            const currentPrice = quote.rawPrice || parseFloat(quote.price);
             const costBasis = stock.purchase_price * stock.quantity;
             const currentValue = currentPrice * stock.quantity;
-            const gainPercent = ((currentValue - costBasis) / costBasis) * 100;
+            const gainValue = currentValue - costBasis;
+            const gainPercent = (gainValue / costBasis) * 100;
 
             return {
               ...stock,
               current_price: currentPrice,
               current_value: currentValue,
+              current_gain_value: gainValue,
               current_gain_percent: gainPercent,
             };
           }
@@ -66,6 +69,7 @@ export const PortfolioList = ({ portfolio, isLoading, onRemove }: PortfolioListP
             ...stock,
             current_price: stock.purchase_price,
             current_value: stock.purchase_price * stock.quantity,
+            current_gain_value: 0,
             current_gain_percent: 0,
           };
         });
@@ -148,16 +152,19 @@ export const PortfolioList = ({ portfolio, isLoading, onRemove }: PortfolioListP
       <div className="grid grid-cols-3 gap-4 mb-6 p-4 rounded-lg bg-secondary/50">
         <div>
           <p className="text-xs text-muted-foreground">Total Value</p>
-          <p className="text-xl font-bold text-foreground">${totalValue.toFixed(2)}</p>
+          <p className="text-xl font-bold text-foreground">${totalValue.toFixed(4)}</p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Total Cost</p>
-          <p className="text-xl font-bold text-foreground">${totalCost.toFixed(2)}</p>
+          <p className="text-xl font-bold text-foreground">${totalCost.toFixed(4)}</p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Total Gain</p>
           <p className={`text-xl font-bold ${totalGainPercent >= 0 ? 'text-success' : 'text-danger'}`}>
-            {totalGainPercent >= 0 ? '+' : ''}{totalGainPercent.toFixed(2)}%
+            {totalGainPercent >= 0 ? '+' : ''}{totalGainPercent.toFixed(4)}%
+          </p>
+          <p className={`text-xs ${totalGainPercent >= 0 ? 'text-success' : 'text-danger'}`}>
+            ${(totalValue - totalCost).toFixed(4)}
           </p>
         </div>
       </div>
@@ -179,7 +186,7 @@ export const PortfolioList = ({ portfolio, isLoading, onRemove }: PortfolioListP
                     {stock.current_gain_percent && (
                       <Badge variant={isGain ? "default" : "destructive"}>
                         {isGain ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingDown className="h-3 w-3 mr-1" />}
-                        {isGain ? '+' : ''}{stock.current_gain_percent.toFixed(2)}%
+                        {isGain ? '+' : ''}{stock.current_gain_percent.toFixed(4)}%
                       </Badge>
                     )}
                   </div>
@@ -202,19 +209,24 @@ export const PortfolioList = ({ portfolio, isLoading, onRemove }: PortfolioListP
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Purchase Price</p>
-                  <p className="font-semibold text-foreground">${stock.purchase_price.toFixed(2)}</p>
+                  <p className="font-semibold text-foreground">${stock.purchase_price.toFixed(4)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Current Price</p>
                   <p className="font-semibold text-foreground">
-                    {stock.current_price ? `$${stock.current_price.toFixed(2)}` : 'Loading...'}
+                    {stock.current_price ? `$${stock.current_price.toFixed(4)}` : 'Loading...'}
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Current Value</p>
                   <p className={`font-semibold ${isGain ? 'text-success' : 'text-danger'}`}>
-                    {stock.current_value ? `$${stock.current_value.toFixed(2)}` : 'Loading...'}
+                    {stock.current_value ? `$${stock.current_value.toFixed(4)}` : 'Loading...'}
                   </p>
+                  {stock.current_gain_value !== undefined && (
+                    <p className={`text-xs ${isGain ? 'text-success' : 'text-danger'}`}>
+                      {isGain ? '+' : ''}${stock.current_gain_value.toFixed(4)}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

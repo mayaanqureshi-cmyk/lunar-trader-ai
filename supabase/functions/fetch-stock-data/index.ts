@@ -103,13 +103,16 @@ serve(async (req) => {
         return {
           symbol: quote.symbol,
           name: quote.shortName || quote.longName || quote.symbol,
-          price: price.toFixed(2),
-          change: change.toFixed(2),
-          changePercent: changePercent.toFixed(2),
+          price: price.toFixed(6), // Return 6 decimal places for extreme accuracy
+          change: change.toFixed(6),
+          changePercent: changePercent.toFixed(6),
           volume: quote.regularMarketVolume || 0,
           marketCap: quote.marketCap || 0,
-          high: quote.regularMarketDayHigh ? parseFloat(quote.regularMarketDayHigh.toString()).toFixed(2) : '0.00',
-          low: quote.regularMarketDayLow ? parseFloat(quote.regularMarketDayLow.toString()).toFixed(2) : '0.00',
+          high: quote.regularMarketDayHigh ? parseFloat(quote.regularMarketDayHigh.toString()).toFixed(6) : '0.000000',
+          low: quote.regularMarketDayLow ? parseFloat(quote.regularMarketDayLow.toString()).toFixed(6) : '0.000000',
+          rawPrice: price, // Full precision raw value
+          rawChange: change,
+          rawChangePercent: changePercent,
         };
       });
 
