@@ -2,7 +2,6 @@ import { Header } from "@/components/Header";
 import { MetricsCard } from "@/components/MetricsCard";
 import { TopGainers } from "@/components/TopGainers";
 import { WeeklyGainers } from "@/components/WeeklyGainers";
-import { SentimentAnalysis } from "@/components/SentimentAnalysis";
 import { TradingSignals } from "@/components/TradingSignals";
 import { PerformanceChart } from "@/components/PerformanceChart";
 import { AddToPortfolio } from "@/components/AddToPortfolio";
@@ -135,8 +134,7 @@ const Index = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <SentimentAnalysis />
+        <div className="max-w-4xl mx-auto">
           <TradingSignals />
         </div>
 

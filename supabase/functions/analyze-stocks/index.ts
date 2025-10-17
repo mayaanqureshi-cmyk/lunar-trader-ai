@@ -19,19 +19,32 @@ serve(async (req) => {
     }
 
     const stockData = stocks.map((s: any) => 
-      `${s.symbol}: Price $${s.price}, Change ${s.change}, Volume ${s.volume}`
+      `${s.symbol}: Price $${s.rawPrice}, Change +${s.rawChange}%, Volume ${s.volume}`
     ).join("\n");
 
-    const prompt = `Analyze these top gaining stocks and provide buy/hold recommendations based on:
-- Price momentum and volume analysis
-- Volatility and risk assessment
-- Short-term trading signals
-- Market conditions
+    const prompt = `You are an expert stock analyst. Analyze these top daily gaining stocks with STRICT criteria.
 
-Stocks:
+CRITICAL RULES FOR BUY RECOMMENDATIONS:
+- Only recommend BUY if the stock meets ALL of these criteria:
+  1. Price change is above +15% (strong momentum)
+  2. High volume indicates institutional interest
+  3. The gain appears sustainable (not just a short squeeze or pump)
+  4. Risk/reward ratio is favorable for swing trading
+  5. No obvious red flags (company fundamentals, sector weakness)
+
+- Recommend HOLD if:
+  1. Price gain is between 8-15% (moderate momentum, needs confirmation)
+  2. Volume is average or below (lacks conviction)
+  3. Price is extended and due for pullback
+  4. Sector or market conditions are uncertain
+  5. Better to wait for consolidation or re-entry
+
+IMPORTANT: Be conservative. Only recommend BUY when you have high confidence. When in doubt, recommend HOLD.
+
+Top Gaining Stocks Today:
 ${stockData}
 
-For each stock, provide a recommendation (BUY or HOLD) with a brief reason (max 15 words).`;
+Provide a recommendation (BUY or HOLD) with a specific, actionable reason (max 20 words) for each stock.`;
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -44,7 +57,7 @@ For each stock, provide a recommendation (BUY or HOLD) with a brief reason (max 
         messages: [
           {
             role: "system",
-            content: "You are a stock trading analyst. Provide concise, actionable recommendations."
+            content: "You are a conservative stock analyst. Only recommend BUY when you have high confidence based on momentum, volume, and sustainability. Prioritize capital preservation."
           },
           {
             role: "user",
@@ -55,7 +68,7 @@ For each stock, provide a recommendation (BUY or HOLD) with a brief reason (max 
           type: "function",
           function: {
             name: "stock_recommendations",
-            description: "Return buy/hold recommendations for stocks",
+            description: "Return buy/hold recommendations for stocks with strict criteria",
             parameters: {
               type: "object",
               properties: {
