@@ -16,18 +16,40 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY not configured");
     }
 
-    const prompt = `As a professional stock analyst, recommend 3-5 stocks for each investment timeline based on current market conditions, trends, and fundamental analysis:
+    const prompt = `As an expert swing trading analyst, recommend 3-5 stocks for each timeframe with focus on QUICK GAINS through momentum and technical setups:
 
-1. TODAY (Day Trading): Stocks with high momentum, volume, and short-term catalysts
-2. ONE WEEK (Swing Trading): Stocks with technical breakout patterns or near-term catalysts
-3. ONE MONTH (Position Trading): Stocks with strong fundamentals and medium-term growth potential
+1. TODAY (Intraday Momentum): High volume breakouts, strong intraday momentum, immediate catalysts (earnings, news, sector rotation). Look for 2-5% quick moves.
+
+2. ONE WEEK (Swing Trade Setup): 
+   - Technical breakouts from consolidation patterns (bull flags, ascending triangles, cup & handle)
+   - Stocks approaching key resistance with strong momentum
+   - Recent positive catalysts (earnings beats, analyst upgrades, contract wins)
+   - RSI between 50-70 (momentum but not overbought)
+   - Volume increasing on up days
+   - Target 5-15% gains
+
+3. ONE MONTH (Position Swing):
+   - Strong uptrends with pullbacks to support (buy the dip opportunities)
+   - Stocks with upcoming catalysts (product launches, FDA approvals, earnings)
+   - Sector rotation plays (identify trending sectors)
+   - Moving above key moving averages (50-day, 200-day crosses)
+   - Fundamental strength backing technical setup
+   - Target 15-30% gains
+
+CRITICAL CRITERIA FOR ALL RECOMMENDATIONS:
+- Recent positive price action and momentum
+- High relative strength vs market
+- Increasing institutional buying
+- Clear entry/exit levels
+- Realistic profit targets
+- Specific catalyst or technical reason for move
 
 For each stock provide:
 - Symbol (real NYSE/NASDAQ symbols only)
-- Company name
-- Current price estimate
-- Recommendation reason (concise, 20 words max)
-- Risk level (low/medium/high)`;
+- Company name  
+- Current price estimate (realistic based on recent trading)
+- Recommendation reason (specific technical setup or catalyst, 25 words max)
+- Risk level (low/medium/high based on volatility and setup quality)`;
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
