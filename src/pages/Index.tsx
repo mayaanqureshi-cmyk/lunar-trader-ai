@@ -13,6 +13,7 @@ import { ProfitTracker } from "@/components/ProfitTracker";
 import { PaperTrading } from "@/components/PaperTrading";
 import { Backtesting } from "@/components/Backtesting";
 import { StockNews } from "@/components/StockNews";
+import { RobinhoodPortfolio } from "@/components/RobinhoodPortfolio";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { DollarSign, TrendingUp, Target, Activity } from "lucide-react";
 import { useEffect } from "react";
@@ -143,14 +144,19 @@ const Index = () => {
         {/* Advanced Features */}
         <div className="mt-8">
           <Tabs defaultValue="news" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 mb-6">
+            <TabsList className="grid w-full grid-cols-4 mb-6">
               <TabsTrigger value="news">News</TabsTrigger>
+              <TabsTrigger value="robinhood">Robinhood</TabsTrigger>
               <TabsTrigger value="paper">Paper Trading</TabsTrigger>
               <TabsTrigger value="backtest">Backtesting</TabsTrigger>
             </TabsList>
             
             <TabsContent value="news">
               <StockNews symbols={portfolio.map(s => s.symbol)} />
+            </TabsContent>
+            
+            <TabsContent value="robinhood">
+              <RobinhoodPortfolio />
             </TabsContent>
             
             <TabsContent value="paper">
