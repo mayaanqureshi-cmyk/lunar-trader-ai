@@ -137,6 +137,15 @@ async function loginToRobinhood(
     }
 
     console.error('Login failed:', data);
+    
+    // Provide detailed error message
+    if (data.detail) {
+      throw new Error(`Robinhood login failed: ${data.detail}`);
+    }
+    if (data.error_description) {
+      throw new Error(`Robinhood login failed: ${data.error_description}`);
+    }
+    
     return null;
   } catch (error) {
     console.error('Login error:', error);

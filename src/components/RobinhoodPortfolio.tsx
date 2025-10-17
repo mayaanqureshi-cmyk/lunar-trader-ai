@@ -49,16 +49,22 @@ export const RobinhoodPortfolio = () => {
             description: "Please enter your Robinhood 2FA code",
           });
         } else {
-          throw error;
+          const errorMsg = data?.error || error.message || 'Failed to authenticate';
+          toast({
+            title: "Authentication Failed",
+            description: errorMsg,
+            variant: "destructive"
+          });
         }
       } else {
         setPortfolio(data.portfolio || []);
         setNeedsMfa(false);
       }
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to fetch Robinhood portfolio';
       toast({
         title: "Error",
-        description: "Failed to fetch Robinhood portfolio",
+        description: errorMsg,
         variant: "destructive"
       });
     } finally {
