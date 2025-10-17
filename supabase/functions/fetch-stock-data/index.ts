@@ -29,17 +29,29 @@ serve(async (req) => {
       }
 
       const data = await response.json();
+      console.log('Yahoo Finance gainers response:', JSON.stringify(data, null, 2));
       const quotes = data.finance.result[0].quotes;
 
-      const formattedData = quotes.slice(0, 5).map((quote: any) => ({
-        symbol: quote.symbol,
-        name: quote.shortName || quote.longName,
-        price: `$${quote.regularMarketPrice?.toFixed(2) || '0.00'}`,
-        change: `${quote.regularMarketChangePercent?.toFixed(2) || '0.00'}%`,
-        volume: formatVolume(quote.regularMarketVolume),
-        rawPrice: quote.regularMarketPrice,
-        rawChange: quote.regularMarketChangePercent,
-      }));
+      const formattedData = quotes.slice(0, 5).map((quote: any) => {
+        // Handle different possible data formats from Yahoo Finance
+        const price = typeof quote.regularMarketPrice === 'number' 
+          ? quote.regularMarketPrice 
+          : parseFloat(quote.regularMarketPrice?.fmt || quote.regularMarketPrice || 0);
+        
+        const changePercent = typeof quote.regularMarketChangePercent === 'number'
+          ? quote.regularMarketChangePercent
+          : parseFloat(quote.regularMarketChangePercent?.fmt || quote.regularMarketChangePercent || 0);
+
+        return {
+          symbol: quote.symbol,
+          name: quote.shortName || quote.longName || quote.symbol,
+          price: `$${price.toFixed(2)}`,
+          change: `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%`,
+          volume: formatVolume(quote.regularMarketVolume || 0),
+          rawPrice: price,
+          rawChange: changePercent,
+        };
+      });
 
       return new Response(JSON.stringify({ data: formattedData }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -61,19 +73,34 @@ serve(async (req) => {
       }
 
       const data = await response.json();
+      console.log('Yahoo Finance quotes response:', JSON.stringify(data, null, 2));
       const quotes = data.quoteResponse.result;
 
-      const formattedData = quotes.map((quote: any) => ({
-        symbol: quote.symbol,
-        name: quote.shortName || quote.longName,
-        price: quote.regularMarketPrice?.toFixed(2),
-        change: quote.regularMarketChange?.toFixed(2),
-        changePercent: quote.regularMarketChangePercent?.toFixed(2),
-        volume: quote.regularMarketVolume,
-        marketCap: quote.marketCap,
-        high: quote.regularMarketDayHigh?.toFixed(2),
-        low: quote.regularMarketDayLow?.toFixed(2),
-      }));
+      const formattedData = quotes.map((quote: any) => {
+        const price = typeof quote.regularMarketPrice === 'number'
+          ? quote.regularMarketPrice
+          : parseFloat(quote.regularMarketPrice || 0);
+        
+        const change = typeof quote.regularMarketChange === 'number'
+          ? quote.regularMarketChange
+          : parseFloat(quote.regularMarketChange || 0);
+        
+        const changePercent = typeof quote.regularMarketChangePercent === 'number'
+          ? quote.regularMarketChangePercent
+          : parseFloat(quote.regularMarketChangePercent || 0);
+
+        return {
+          symbol: quote.symbol,
+          name: quote.shortName || quote.longName || quote.symbol,
+          price: price.toFixed(2),
+          change: change.toFixed(2),
+          changePercent: changePercent.toFixed(2),
+          volume: quote.regularMarketVolume || 0,
+          marketCap: quote.marketCap || 0,
+          high: quote.regularMarketDayHigh ? parseFloat(quote.regularMarketDayHigh.toString()).toFixed(2) : '0.00',
+          low: quote.regularMarketDayLow ? parseFloat(quote.regularMarketDayLow.toString()).toFixed(2) : '0.00',
+        };
+      });
 
       return new Response(JSON.stringify({ data: formattedData }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
