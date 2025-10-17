@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Plus } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface AddToPortfolioProps {
   onAdd: (stock: {
@@ -15,31 +17,43 @@ interface AddToPortfolioProps {
 }
 
 export const AddToPortfolio = ({ onAdd }: AddToPortfolioProps) => {
-  const [symbol, setSymbol] = useState("");
-  const [name, setName] = useState("");
-  const [price, setPrice] = useState("");
-  const [quantity, setQuantity] = useState("");
+  const [input, setInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!symbol || !name || !price || !quantity) return;
+    if (!input.trim()) return;
 
     setIsSubmitting(true);
     try {
-      await onAdd({
-        symbol: symbol.toUpperCase(),
-        name,
-        purchase_price: parseFloat(price),
-        quantity: parseInt(quantity),
+      const { data, error } = await supabase.functions.invoke("parse-stock-input", {
+        body: { text: input }
       });
 
-      // Reset form
-      setSymbol("");
-      setName("");
-      setPrice("");
-      setQuantity("");
+      if (error) throw error;
+      if (!data) throw new Error("No data returned");
+
+      await onAdd({
+        symbol: data.symbol,
+        name: data.name,
+        purchase_price: data.purchase_price,
+        quantity: data.quantity,
+      });
+
+      setInput("");
+      toast({
+        title: "Stock added",
+        description: `Added ${data.quantity} shares of ${data.symbol}`,
+      });
+    } catch (error) {
+      console.error("Error parsing stock input:", error);
+      toast({
+        title: "Error",
+        description: "Could not parse your input. Try: 'bought 10 AAPL at 150'",
+        variant: "destructive",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -53,54 +67,19 @@ export const AddToPortfolio = ({ onAdd }: AddToPortfolioProps) => {
       </h3>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="symbol">Symbol</Label>
-            <Input
-              id="symbol"
-              value={symbol}
-              onChange={(e) => setSymbol(e.target.value)}
-              placeholder="AAPL"
-              className="uppercase"
-              required
-            />
-          </div>
-          <div>
-            <Label htmlFor="name">Company Name</Label>
-            <Input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Apple Inc"
-              required
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="price">Purchase Price ($)</Label>
-            <Input
-              id="price"
-              type="number"
-              step="0.01"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              placeholder="150.00"
-              required
-            />
-          </div>
-          <div>
-            <Label htmlFor="quantity">Quantity</Label>
-            <Input
-              id="quantity"
-              type="number"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              placeholder="10"
-              required
-            />
-          </div>
+        <div>
+          <Label htmlFor="stock-input">Describe your purchase</Label>
+          <Textarea
+            id="stock-input"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="bought 10 AAPL at 150"
+            className="min-h-[80px]"
+            required
+          />
+          <p className="text-xs text-muted-foreground mt-2">
+            Examples: "bought 10 AAPL at 150" or "purchased 5 shares of Tesla at 200"
+          </p>
         </div>
 
         <Button 
