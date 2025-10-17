@@ -2,17 +2,23 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Brain, RefreshCw, TrendingUp, AlertTriangle } from "lucide-react";
+import { Brain, RefreshCw, Calendar, Clock, TrendingUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 
+interface StockRecommendation {
+  symbol: string;
+  name: string;
+  price: number;
+  reason: string;
+  risk: "low" | "medium" | "high";
+}
+
 interface AIRecommendations {
-  dip_threshold: number;
-  gain_threshold: number;
-  reasoning: string;
-  risk_assessment: string;
-  suggested_actions: string[];
+  today: StockRecommendation[];
+  one_week: StockRecommendation[];
+  one_month: StockRecommendation[];
 }
 
 export const AIInsights = () => {
@@ -23,15 +29,15 @@ export const AIInsights = () => {
   const fetchRecommendations = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('optimize-thresholds');
+      const { data, error } = await supabase.functions.invoke('recommend-stocks');
 
       if (error) throw error;
 
-      if (data?.recommendations) {
-        setRecommendations(data.recommendations);
+      if (data) {
+        setRecommendations(data);
         toast({
           title: "AI Analysis Complete",
-          description: "Trading thresholds have been optimized",
+          description: "Stock recommendations generated",
         });
       }
     } catch (error) {
@@ -48,11 +54,44 @@ export const AIInsights = () => {
 
   const getRiskColor = (risk: string) => {
     switch (risk.toLowerCase()) {
-      case 'low': return 'text-success';
-      case 'high': return 'text-danger';
-      default: return 'text-primary';
+      case 'low': return 'bg-success/10 text-success border-success/20';
+      case 'high': return 'bg-danger/10 text-danger border-danger/20';
+      default: return 'bg-primary/10 text-primary border-primary/20';
     }
   };
+
+  const renderStockList = (stocks: StockRecommendation[], title: string, icon: React.ReactNode) => (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        {icon}
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+      </div>
+      <div className="space-y-3">
+        {stocks.map((stock, index) => (
+          <div
+            key={index}
+            className="p-4 rounded-lg bg-secondary/50 border border-border"
+          >
+            <div className="flex items-start justify-between mb-2">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-foreground">{stock.symbol}</span>
+                  <Badge variant="outline" className={getRiskColor(stock.risk)}>
+                    {stock.risk.toUpperCase()}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">{stock.name}</p>
+              </div>
+              <span className="text-sm font-semibold text-foreground">
+                ${stock.price.toFixed(2)}
+              </span>
+            </div>
+            <p className="text-sm text-muted-foreground">{stock.reason}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <Card className="p-6 bg-card border-border shadow-card">
@@ -74,77 +113,36 @@ export const AIInsights = () => {
 
       {isLoading ? (
         <div className="space-y-4">
-          <Skeleton className="h-20 w-full" />
-          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
           <Skeleton className="h-32 w-full" />
         </div>
       ) : recommendations ? (
         <div className="space-y-6">
-          {/* Optimized Thresholds */}
-          <div>
-            <h3 className="text-sm font-semibold text-foreground mb-3">Optimized Thresholds</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 rounded-lg bg-secondary/50 border border-border">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-muted-foreground">Dip Alert</span>
-                  <TrendingUp className="h-4 w-4 text-primary" />
-                </div>
-                <p className="text-2xl font-bold text-foreground">
-                  {recommendations.dip_threshold}%
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Trigger when price drops
-                </p>
-              </div>
-
-              <div className="p-4 rounded-lg bg-secondary/50 border border-border">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-muted-foreground">Sell Signal</span>
-                  <TrendingUp className="h-4 w-4 text-success" />
-                </div>
-                <p className="text-2xl font-bold text-foreground">
-                  {recommendations.gain_threshold}%
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Minimum gain to sell
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Risk Assessment */}
-          <div className="p-4 rounded-lg bg-secondary/50 border border-border">
-            <div className="flex items-center gap-2 mb-2">
-              <AlertTriangle className={`h-4 w-4 ${getRiskColor(recommendations.risk_assessment)}`} />
-              <span className="text-sm font-semibold text-foreground">Risk Assessment</span>
-              <Badge variant="outline" className={getRiskColor(recommendations.risk_assessment)}>
-                {recommendations.risk_assessment.toUpperCase()}
-              </Badge>
-            </div>
-            <p className="text-sm text-muted-foreground">{recommendations.reasoning}</p>
-          </div>
-
-          {/* Suggested Actions */}
-          <div>
-            <h3 className="text-sm font-semibold text-foreground mb-3">Suggested Actions</h3>
-            <div className="space-y-2">
-              {recommendations.suggested_actions.map((action, index) => (
-                <div
-                  key={index}
-                  className="p-3 rounded-lg bg-primary/10 border border-primary/20 text-sm text-foreground"
-                >
-                  {index + 1}. {action}
-                </div>
-              ))}
-            </div>
-          </div>
+          {renderStockList(
+            recommendations.today,
+            "Buy Today (Day Trading)",
+            <Clock className="h-4 w-4 text-primary" />
+          )}
+          
+          {renderStockList(
+            recommendations.one_week,
+            "Buy This Week (Swing Trading)",
+            <Calendar className="h-4 w-4 text-primary" />
+          )}
+          
+          {renderStockList(
+            recommendations.one_month,
+            "Buy This Month (Position Trading)",
+            <TrendingUp className="h-4 w-4 text-primary" />
+          )}
         </div>
       ) : (
         <div className="text-center py-8">
           <Brain className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <p className="text-muted-foreground mb-2">Get AI-powered trading recommendations</p>
+          <p className="text-muted-foreground mb-2">Get AI-powered stock recommendations</p>
           <p className="text-sm text-muted-foreground">
-            Our AI analyzes your portfolio and market data to optimize your trading thresholds
+            AI analyzes market trends to recommend stocks for different time horizons
           </p>
         </div>
       )}
