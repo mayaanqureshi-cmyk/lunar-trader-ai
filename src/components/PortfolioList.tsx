@@ -42,13 +42,21 @@ export const PortfolioList = ({ portfolio, isLoading, onRemove }: PortfolioListP
 
       if (error) {
         console.error('Error invoking fetch-stock-data:', error);
+        // Set fallback values to stop infinite loading
+        setEnrichedPortfolio(portfolio.map(stock => ({
+          ...stock,
+          current_price: stock.purchase_price,
+          current_value: stock.purchase_price * stock.quantity,
+          current_gain_value: 0,
+          current_gain_percent: 0,
+        })));
         return;
       }
 
-      if (data?.data && Array.isArray(data.data)) {
+      if (data?.data && Array.isArray(data.data) && data.data.length > 0) {
         const enriched = portfolio.map(stock => {
           const quote = data.data.find((q: any) => q.symbol === stock.symbol);
-          if (quote) {
+          if (quote && quote.rawPrice) {
             // Use raw price values for maximum precision
             const currentPrice = quote.rawPrice || parseFloat(quote.price);
             const costBasis = stock.purchase_price * stock.quantity;
@@ -64,7 +72,7 @@ export const PortfolioList = ({ portfolio, isLoading, onRemove }: PortfolioListP
               current_gain_percent: gainPercent,
             };
           }
-          // Return stock with purchase price as fallback
+          // Fallback to purchase price if quote not found
           return {
             ...stock,
             current_price: stock.purchase_price,
@@ -75,10 +83,26 @@ export const PortfolioList = ({ portfolio, isLoading, onRemove }: PortfolioListP
         });
 
         setEnrichedPortfolio(enriched);
+      } else {
+        // No data returned, use purchase prices as fallback
+        setEnrichedPortfolio(portfolio.map(stock => ({
+          ...stock,
+          current_price: stock.purchase_price,
+          current_value: stock.purchase_price * stock.quantity,
+          current_gain_value: 0,
+          current_gain_percent: 0,
+        })));
       }
     } catch (error) {
       console.error('Error fetching current prices:', error);
-      // Keep showing portfolio with purchase prices on error
+      // Set fallback values on error
+      setEnrichedPortfolio(portfolio.map(stock => ({
+        ...stock,
+        current_price: stock.purchase_price,
+        current_value: stock.purchase_price * stock.quantity,
+        current_gain_value: 0,
+        current_gain_percent: 0,
+      })));
     } finally {
       setIsRefreshing(false);
     }

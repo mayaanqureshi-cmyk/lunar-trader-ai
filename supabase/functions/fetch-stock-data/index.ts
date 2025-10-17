@@ -80,11 +80,25 @@ serve(async (req) => {
       );
 
       if (!response.ok) {
-        throw new Error('Failed to fetch quotes data');
+        console.error('Yahoo Finance quotes API error:', response.status);
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        // Return empty data instead of throwing to prevent infinite loading
+        return new Response(JSON.stringify({ data: [] }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
 
       const data = await response.json();
       console.log('Yahoo Finance quotes response:', JSON.stringify(data, null, 2));
+      
+      if (!data.quoteResponse?.result) {
+        console.error('No quotes in response');
+        return new Response(JSON.stringify({ data: [] }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
       const quotes = data.quoteResponse.result;
 
       const formattedData = quotes.map((quote: any) => {
