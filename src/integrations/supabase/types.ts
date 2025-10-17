@@ -14,7 +14,83 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      portfolio: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          purchase_date: string
+          purchase_price: number
+          quantity: number
+          symbol: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          purchase_date?: string
+          purchase_price: number
+          quantity: number
+          symbol: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          purchase_date?: string
+          purchase_price?: number
+          quantity?: number
+          symbol?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      trading_signals: {
+        Row: {
+          created_at: string
+          current_gain_percent: number | null
+          current_price: number
+          id: string
+          is_read: boolean | null
+          message: string
+          portfolio_id: string | null
+          price_change_percent: number
+          signal_type: string
+        }
+        Insert: {
+          created_at?: string
+          current_gain_percent?: number | null
+          current_price: number
+          id?: string
+          is_read?: boolean | null
+          message: string
+          portfolio_id?: string | null
+          price_change_percent: number
+          signal_type: string
+        }
+        Update: {
+          created_at?: string
+          current_gain_percent?: number | null
+          current_price?: number
+          id?: string
+          is_read?: boolean | null
+          message?: string
+          portfolio_id?: string | null
+          price_change_percent?: number
+          signal_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trading_signals_portfolio_id_fkey"
+            columns: ["portfolio_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
