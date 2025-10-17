@@ -4,10 +4,36 @@ import { TopGainers } from "@/components/TopGainers";
 import { SentimentAnalysis } from "@/components/SentimentAnalysis";
 import { TradingSignals } from "@/components/TradingSignals";
 import { PerformanceChart } from "@/components/PerformanceChart";
+import { AddToPortfolio } from "@/components/AddToPortfolio";
+import { PortfolioList } from "@/components/PortfolioList";
+import { TradingNotifications } from "@/components/TradingNotifications";
+import { AIInsights } from "@/components/AIInsights";
+import { usePortfolio } from "@/hooks/usePortfolio";
 import { DollarSign, TrendingUp, Target, Activity } from "lucide-react";
 import heroBg from "@/assets/hero-bg.jpg";
+import { useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 const Index = () => {
+  const { portfolio, signals, isLoading, addToPortfolio, removeFromPortfolio, markSignalAsRead } = usePortfolio();
+
+  // Monitor portfolio every 5 minutes
+  useEffect(() => {
+    const monitorPortfolio = async () => {
+      if (portfolio.length > 0) {
+        await supabase.functions.invoke('monitor-portfolio');
+      }
+    };
+
+    monitorPortfolio();
+    const interval = setInterval(monitorPortfolio, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [portfolio.length]);
+
+  const totalValue = portfolio.reduce((sum, stock) => 
+    sum + (stock.purchase_price * stock.quantity), 0
+  );
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -33,10 +59,24 @@ const Index = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <MetricsCard
             title="Portfolio Value"
-            value="$13,100"
+            value={`$${totalValue.toFixed(2)}`}
             change="31.0%"
             isPositive={true}
             icon={DollarSign}
+          />
+          <MetricsCard
+            title="Active Alerts"
+            value={signals.length.toString()}
+            change={`${signals.length} new`}
+            isPositive={signals.length === 0}
+            icon={Target}
+          />
+          <MetricsCard
+            title="Stocks Tracked"
+            value={portfolio.length.toString()}
+            change={`${portfolio.length} total`}
+            isPositive={true}
+            icon={Activity}
           />
           <MetricsCard
             title="Today's Gain"
@@ -45,20 +85,29 @@ const Index = () => {
             isPositive={true}
             icon={TrendingUp}
           />
-          <MetricsCard
-            title="Active Signals"
-            value="8"
-            change="2 new"
-            isPositive={true}
-            icon={Target}
+        </div>
+
+        {/* Portfolio Management Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          <AddToPortfolio onAdd={addToPortfolio} />
+          <TradingNotifications 
+            signals={signals} 
+            isLoading={isLoading}
+            onDismiss={markSignalAsRead}
           />
-          <MetricsCard
-            title="Win Rate"
-            value="78.5%"
-            change="5.2%"
-            isPositive={true}
-            icon={Activity}
-          />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <div className="lg:col-span-2">
+            <PortfolioList
+              portfolio={portfolio}
+              isLoading={isLoading}
+              onRemove={removeFromPortfolio}
+            />
+          </div>
+          <div>
+            <AIInsights />
+          </div>
         </div>
 
         {/* Main Content Grid */}
