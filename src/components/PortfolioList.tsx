@@ -25,20 +25,30 @@ export const PortfolioList = ({ portfolio, isLoading, onRemove }: PortfolioListP
   const [enrichedPortfolio, setEnrichedPortfolio] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Initialize with portfolio data immediately
+  useEffect(() => {
+    setEnrichedPortfolio(portfolio);
+  }, [portfolio]);
+
   const fetchCurrentPrices = async () => {
     if (portfolio.length === 0) return;
 
     setIsRefreshing(true);
     try {
       const symbols = portfolio.map(stock => stock.symbol);
-      const { data } = await supabase.functions.invoke('fetch-stock-data', {
+      const { data, error } = await supabase.functions.invoke('fetch-stock-data', {
         body: { type: 'quotes', symbols }
       });
 
-      if (data?.data) {
+      if (error) {
+        console.error('Error invoking fetch-stock-data:', error);
+        return;
+      }
+
+      if (data?.data && Array.isArray(data.data)) {
         const enriched = portfolio.map(stock => {
           const quote = data.data.find((q: any) => q.symbol === stock.symbol);
-          if (quote) {
+          if (quote && quote.price) {
             const currentPrice = parseFloat(quote.price);
             const costBasis = stock.purchase_price * stock.quantity;
             const currentValue = currentPrice * stock.quantity;
@@ -51,23 +61,32 @@ export const PortfolioList = ({ portfolio, isLoading, onRemove }: PortfolioListP
               current_gain_percent: gainPercent,
             };
           }
-          return stock;
+          // Return stock with purchase price as fallback
+          return {
+            ...stock,
+            current_price: stock.purchase_price,
+            current_value: stock.purchase_price * stock.quantity,
+            current_gain_percent: 0,
+          };
         });
 
         setEnrichedPortfolio(enriched);
       }
     } catch (error) {
       console.error('Error fetching current prices:', error);
+      // Keep showing portfolio with purchase prices on error
     } finally {
       setIsRefreshing(false);
     }
   };
 
   useEffect(() => {
-    fetchCurrentPrices();
-    const interval = setInterval(fetchCurrentPrices, 60000); // Refresh every minute
-    return () => clearInterval(interval);
-  }, [portfolio]);
+    if (portfolio.length > 0) {
+      fetchCurrentPrices();
+      const interval = setInterval(fetchCurrentPrices, 60000); // Refresh every minute
+      return () => clearInterval(interval);
+    }
+  }, [portfolio.length]);
 
   if (isLoading) {
     return (
