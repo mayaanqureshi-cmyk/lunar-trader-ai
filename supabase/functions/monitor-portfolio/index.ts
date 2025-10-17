@@ -30,23 +30,46 @@ serve(async (req) => {
       });
     }
 
-    // Fetch current prices from Yahoo Finance
-    const symbols = portfolio.map(stock => stock.symbol);
-    const response = await fetch(
-      `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols.join(',')}`,
-      {
-        headers: {
-          'User-Agent': 'Mozilla/5.0',
-        },
-      }
-    );
+    // Fetch current prices with graceful fallback
+    const symbols: string[] = portfolio.map((stock: any) => stock.symbol);
+    let quotes: any[] = [];
 
-    if (!response.ok) {
-      throw new Error('Failed to fetch stock prices');
+    try {
+      const response = await fetch(
+        `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols.join(',')}`,
+        {
+          headers: {
+            'User-Agent': 'Mozilla/5.0',
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        quotes = Array.isArray(data?.quoteResponse?.result) ? data.quoteResponse.result : [];
+      } else {
+        console.error('Yahoo quotes fetch failed with status:', response.status);
+      }
+    } catch (e) {
+      console.error('Yahoo quotes fetch threw error:', e);
     }
 
-    const data = await response.json();
-    const quotes = data.quoteResponse.result;
+    // Fallback to internal function if Yahoo failed
+    if (!quotes.length) {
+      try {
+        const { data: fallbackData, error: fallbackError } = await supabaseClient.functions.invoke('fetch-stock-data', {
+          body: { type: 'quotes', symbols },
+        });
+        if (!fallbackError && Array.isArray(fallbackData?.data)) {
+          // Expecting an array of { symbol, rawPrice }
+          quotes = fallbackData.data.map((q: any) => ({ symbol: q.symbol, regularMarketPrice: q.rawPrice }));
+        } else if (fallbackError) {
+          console.error('fetch-stock-data fallback error:', fallbackError);
+        }
+      } catch (e) {
+        console.error('fetch-stock-data fallback threw error:', e);
+      }
+    }
 
     // Analyze each stock and generate signals
     const signals = [];
