@@ -16,9 +16,9 @@ export const Header = () => {
           </div>
           
           <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2 text-sm">
-              <Activity className="h-4 w-4 text-primary animate-pulse" />
-              <span className="text-muted-foreground">Live Market Data</span>
+            <div className="flex items-center gap-2 text-sm px-3 py-1.5 bg-success/10 rounded-full border border-success/20">
+              <Activity className="h-4 w-4 text-success animate-pulse" />
+              <span className="text-success font-medium">Live Data</span>
             </div>
           </div>
         </div>

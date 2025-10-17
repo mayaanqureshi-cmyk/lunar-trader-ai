@@ -1,24 +1,37 @@
 import { Card } from "@/components/ui/card";
-import { TrendingUp } from "lucide-react";
-
-const mockGainers = [
-  { symbol: "NVDA", name: "NVIDIA Corp", price: "$487.32", change: "+8.45%", volume: "52.3M" },
-  { symbol: "TSLA", name: "Tesla Inc", price: "$242.18", change: "+6.82%", volume: "124.5M" },
-  { symbol: "AMD", name: "Advanced Micro", price: "$145.67", change: "+5.23%", volume: "78.2M" },
-  { symbol: "META", name: "Meta Platforms", price: "$512.45", change: "+4.91%", volume: "45.8M" },
-  { symbol: "AAPL", name: "Apple Inc", price: "$178.23", change: "+3.67%", volume: "89.4M" },
-];
+import { TrendingUp, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useStockData } from "@/hooks/useStockData";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export const TopGainers = () => {
+  const { gainers, isLoading, refetch } = useStockData();
   return (
     <Card className="p-6 bg-card border-border shadow-card">
-      <div className="flex items-center gap-2 mb-6">
-        <TrendingUp className="h-5 w-5 text-success" />
-        <h2 className="text-lg font-bold text-foreground">Top Daily Gainers</h2>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="h-5 w-5 text-success" />
+          <h2 className="text-lg font-bold text-foreground">Top Daily Gainers</h2>
+        </div>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={refetch}
+          className="text-muted-foreground hover:text-foreground"
+        >
+          <RefreshCw className="h-4 w-4" />
+        </Button>
       </div>
       
-      <div className="space-y-3">
-        {mockGainers.map((stock, index) => (
+      {isLoading ? (
+        <div className="space-y-3">
+          {[...Array(5)].map((_, i) => (
+            <Skeleton key={i} className="h-20 w-full" />
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {gainers.map((stock, index) => (
           <div 
             key={stock.symbol}
             className="flex items-center justify-between p-4 rounded-lg bg-secondary/50 hover:bg-secondary transition-all duration-200"
@@ -43,8 +56,9 @@ export const TopGainers = () => {
               <p className="text-sm text-foreground">{stock.volume}</p>
             </div>
           </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </Card>
   );
 };

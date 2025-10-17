@@ -1,14 +1,30 @@
 import { Card } from "@/components/ui/card";
 import { Brain, TrendingUp, TrendingDown, Minus } from "lucide-react";
-
-const mockSentiment = [
-  { source: "Wall Street Journal", sentiment: "bullish", confidence: 87, summary: "Strong earnings reports drive market optimism" },
-  { source: "Bloomberg", sentiment: "bullish", confidence: 82, summary: "Tech sector shows continued growth momentum" },
-  { source: "CNBC", sentiment: "neutral", confidence: 65, summary: "Mixed signals on inflation data" },
-  { source: "Reuters", sentiment: "bullish", confidence: 78, summary: "Federal Reserve maintains steady course" },
-];
+import { useStockData } from "@/hooks/useStockData";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export const SentimentAnalysis = () => {
+  const { news, isLoading } = useStockData();
+
+  // Analyze sentiment based on keywords (simple implementation)
+  const analyzeSentiment = (title: string) => {
+    const bullishWords = ['gain', 'surge', 'rally', 'up', 'high', 'growth', 'profit', 'beat'];
+    const bearishWords = ['fall', 'drop', 'decline', 'down', 'low', 'loss', 'miss'];
+    
+    const lowerTitle = title.toLowerCase();
+    const bullishCount = bullishWords.filter(word => lowerTitle.includes(word)).length;
+    const bearishCount = bearishWords.filter(word => lowerTitle.includes(word)).length;
+    
+    if (bullishCount > bearishCount) return { sentiment: 'bullish', confidence: 70 + (bullishCount * 5) };
+    if (bearishCount > bullishCount) return { sentiment: 'bearish', confidence: 70 + (bearishCount * 5) };
+    return { sentiment: 'neutral', confidence: 65 };
+  };
+
+  const mockSentiment = news.map(item => ({
+    source: item.source,
+    summary: item.summary,
+    ...analyzeSentiment(item.title),
+  }));
   const getSentimentIcon = (sentiment: string) => {
     switch(sentiment) {
       case "bullish": return <TrendingUp className="h-4 w-4 text-success" />;
@@ -34,14 +50,23 @@ export const SentimentAnalysis = () => {
           <Brain className="h-5 w-5 text-primary" />
           <h2 className="text-lg font-bold text-foreground">Market Sentiment</h2>
         </div>
-        <div className="text-right">
-          <p className="text-xs text-muted-foreground">Overall Score</p>
-          <p className="text-2xl font-bold text-success">{overallSentiment}%</p>
-        </div>
+        {!isLoading && mockSentiment.length > 0 && (
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground">Overall Score</p>
+            <p className="text-2xl font-bold text-success">{overallSentiment}%</p>
+          </div>
+        )}
       </div>
 
-      <div className="space-y-4">
-        {mockSentiment.map((item, index) => (
+      {isLoading ? (
+        <div className="space-y-4">
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-24 w-full" />
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {mockSentiment.map((item, index) => (
           <div 
             key={index}
             className="p-4 rounded-lg bg-secondary/50 border border-border"
@@ -65,8 +90,9 @@ export const SentimentAnalysis = () => {
             </div>
             <p className="text-sm text-muted-foreground">{item.summary}</p>
           </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </Card>
   );
 };
