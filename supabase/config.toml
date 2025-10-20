@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.execute-alpaca-trade]
 verify_jwt = false
+
+[functions.fetch-alpaca-account]
+verify_jwt = false

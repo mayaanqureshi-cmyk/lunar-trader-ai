@@ -6,6 +6,8 @@ import { TradingNotifications } from "@/components/TradingNotifications";
 import { AIStockAnalyzer } from "@/components/AIStockAnalyzer";
 import { TechnicalAnalysis } from "@/components/TechnicalAnalysis";
 import { AlpacaAutoTrading } from "@/components/AlpacaAutoTrading";
+import { PortfolioManagement } from "@/components/PortfolioManagement";
+import { EnhancedOrderEntry } from "@/components/EnhancedOrderEntry";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -153,8 +155,16 @@ const Index = () => {
         </div>
 
         {/* Main Features */}
-        <Tabs defaultValue="auto-trade" className="w-full">
-          <TabsList className="grid w-full grid-cols-6 mb-6 bg-card/50 backdrop-blur">
+        <Tabs defaultValue="portfolio" className="w-full">
+          <TabsList className="grid w-full grid-cols-7 mb-6 bg-card/50 backdrop-blur">
+            <TabsTrigger value="portfolio" className="data-[state=active]:bg-primary/10">
+              <TrendingUp className="h-4 w-4 mr-2" />
+              Portfolio
+            </TabsTrigger>
+            <TabsTrigger value="trade" className="data-[state=active]:bg-primary/10">
+              <Zap className="h-4 w-4 mr-2" />
+              Trade
+            </TabsTrigger>
             <TabsTrigger value="auto-trade" className="data-[state=active]:bg-primary/10">
               <Zap className="h-4 w-4 mr-2" />
               Auto-Trade
@@ -175,13 +185,17 @@ const Index = () => {
               <LineChart className="h-4 w-4 mr-2" />
               Paper Trading
             </TabsTrigger>
-            <TabsTrigger value="backtest" className="data-[state=active]:bg-primary/10">
-              <Bot className="h-4 w-4 mr-2" />
-              Backtesting
-            </TabsTrigger>
           </TabsList>
           
-          <TabsContent value="auto-trade" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <TabsContent value="portfolio" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <PortfolioManagement />
+          </TabsContent>
+          
+          <TabsContent value="trade" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <EnhancedOrderEntry />
+          </TabsContent>
+          
+          <TabsContent value="auto-trade" className="animate-in fade-in-from-bottom-4 duration-500">
             <AlpacaAutoTrading 
               onAutoTradingChange={setIsAutoTradingEnabled}
               onMaxPositionSizeChange={setMaxPositionSize}
@@ -205,10 +219,6 @@ const Index = () => {
           
           <TabsContent value="paper" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <PaperTrading />
-          </TabsContent>
-          
-          <TabsContent value="backtest" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <Backtesting />
           </TabsContent>
         </Tabs>
       </div>

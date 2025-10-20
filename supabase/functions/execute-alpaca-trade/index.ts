@@ -11,9 +11,9 @@ serve(async (req) => {
   }
 
   try {
-    const { symbol, action, quantity, orderType = 'market' } = await req.json();
+    const { symbol, action, quantity, orderType = 'market', limit_price, stop_price } = await req.json();
     
-    console.log(`Executing ${action} order for ${symbol}, quantity: ${quantity}`);
+    console.log(`Executing ${action} order for ${symbol}, quantity: ${quantity}, type: ${orderType}`);
 
     const ALPACA_API_KEY = Deno.env.get('ALPACA_API_KEY');
     const ALPACA_SECRET_KEY = Deno.env.get('ALPACA_SECRET_KEY');
@@ -40,15 +40,23 @@ serve(async (req) => {
     console.log('Account status:', accountData.status, 'Buying power:', accountData.buying_power);
 
     // Place the order
-    const orderPayload = {
+    const alpacaOrderPayload: any = {
       symbol: symbol.toUpperCase(),
       qty: quantity,
-      side: action.toLowerCase(), // 'buy' or 'sell'
+      side: action.toLowerCase(),
       type: orderType,
       time_in_force: 'day',
     };
 
-    console.log('Placing order:', orderPayload);
+    if (limit_price) {
+      alpacaOrderPayload.limit_price = limit_price;
+    }
+
+    if (stop_price) {
+      alpacaOrderPayload.stop_price = stop_price;
+    }
+
+    console.log('Placing order:', alpacaOrderPayload);
 
     const orderResponse = await fetch('https://paper-api.alpaca.markets/v2/orders', {
       method: 'POST',
@@ -57,7 +65,7 @@ serve(async (req) => {
         'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(orderPayload),
+      body: JSON.stringify(alpacaOrderPayload),
     });
 
     if (!orderResponse.ok) {
