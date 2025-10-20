@@ -3,7 +3,9 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Wallet, TrendingUp, TrendingDown, DollarSign } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Wallet, TrendingUp, TrendingDown, DollarSign, ShoppingCart } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -38,6 +40,9 @@ export const PaperTrading = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [totalValue, setTotalValue] = useState(0);
   const [totalProfitLoss, setTotalProfitLoss] = useState(0);
+  const [buySymbol, setBuySymbol] = useState("");
+  const [buyQuantity, setBuyQuantity] = useState("");
+  const [isBuying, setIsBuying] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -116,6 +121,76 @@ export const PaperTrading = () => {
     }
   };
 
+  const handleBuy = async () => {
+    if (!buySymbol || !buyQuantity) {
+      toast({
+        title: "Error",
+        description: "Please enter both symbol and quantity",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsBuying(true);
+    try {
+      // Fetch current price
+      const priceResponse = await fetch(
+        `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${buySymbol.toUpperCase()}`
+      );
+      const priceData = await priceResponse.json();
+      const quote = priceData.quoteResponse.quotes[0];
+
+      if (!quote) {
+        throw new Error("Stock symbol not found");
+      }
+
+      const currentPrice = quote.regularMarketPrice;
+      const quantity = parseFloat(buyQuantity);
+      const totalValue = currentPrice * quantity;
+
+      // Add to portfolio
+      const { error: portfolioError } = await supabase.from("paper_portfolio").insert({
+        symbol: buySymbol.toUpperCase(),
+        name: quote.shortName || quote.longName || buySymbol.toUpperCase(),
+        purchase_price: currentPrice,
+        quantity: quantity,
+      });
+
+      if (portfolioError) throw portfolioError;
+
+      // Record the trade
+      const { error: tradeError } = await supabase.from("paper_trades").insert({
+        symbol: buySymbol.toUpperCase(),
+        action: "buy",
+        quantity: quantity,
+        price: currentPrice,
+        total_value: totalValue,
+        profit_loss: null,
+      });
+
+      if (tradeError) throw tradeError;
+
+      toast({
+        title: "Trade Executed",
+        description: `Bought ${quantity} shares of ${buySymbol.toUpperCase()} at $${currentPrice.toFixed(2)}`,
+      });
+
+      setBuySymbol("");
+      setBuyQuantity("");
+      fetchPaperPortfolio();
+      fetchPaperTrades();
+    } catch (error) {
+      console.error("Error buying stock:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to execute trade",
+        variant: "destructive",
+      });
+    } finally {
+      setIsBuying(false);
+    }
+  };
+
   const handleSell = async (stock: PaperStock) => {
     try {
       const profitLoss = (stock.current_price! - stock.purchase_price) * stock.quantity;
@@ -176,6 +251,46 @@ export const PaperTrading = () => {
         </div>
       ) : (
         <>
+          {/* Buy Form */}
+          <div className="p-6 rounded-lg bg-gradient-to-br from-primary/5 to-secondary/10 border border-primary/20 mb-6">
+            <div className="flex items-center gap-2 mb-4">
+              <ShoppingCart className="h-5 w-5 text-primary" />
+              <h3 className="text-lg font-semibold text-foreground">Buy Stock</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="symbol" className="text-sm font-medium">Symbol</Label>
+                <Input
+                  id="symbol"
+                  placeholder="AAPL"
+                  value={buySymbol}
+                  onChange={(e) => setBuySymbol(e.target.value.toUpperCase())}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="quantity" className="text-sm font-medium">Quantity</Label>
+                <Input
+                  id="quantity"
+                  type="number"
+                  placeholder="10"
+                  value={buyQuantity}
+                  onChange={(e) => setBuyQuantity(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <div className="flex items-end">
+                <Button
+                  onClick={handleBuy}
+                  disabled={isBuying}
+                  className="w-full"
+                >
+                  {isBuying ? "Buying..." : "Buy"}
+                </Button>
+              </div>
+            </div>
+          </div>
+
           {/* Summary */}
           <div className="grid grid-cols-2 gap-4 mb-6">
             <div className="p-4 rounded-lg bg-secondary/50 border border-border">
