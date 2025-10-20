@@ -11,3 +11,15 @@ verify_jwt = false
 
 [functions.run-backtest]
 verify_jwt = false
+
+[functions.analyze-stocks]
+verify_jwt = false
+
+[functions.fetch-stock-data]
+verify_jwt = false
+
+[functions.monitor-portfolio]
+verify_jwt = false
+
+[functions.analyze-historical-patterns]
+verify_jwt = false

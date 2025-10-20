@@ -3,11 +3,12 @@ import { TopGainers } from "@/components/TopGainers";
 import { PaperTrading } from "@/components/PaperTrading";
 import { Backtesting } from "@/components/Backtesting";
 import { TradingNotifications } from "@/components/TradingNotifications";
+import { AIStockAnalyzer } from "@/components/AIStockAnalyzer";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
-import { TrendingUp, Bot, LineChart, AlertTriangle } from "lucide-react";
+import { TrendingUp, Bot, LineChart, AlertTriangle, Brain } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface TradingSignal {
@@ -148,11 +149,15 @@ const Index = () => {
         </div>
 
         {/* Main Features */}
-        <Tabs defaultValue="recommendations" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-6 bg-card/50 backdrop-blur">
+        <Tabs defaultValue="ai-analyzer" className="w-full">
+          <TabsList className="grid w-full grid-cols-4 mb-6 bg-card/50 backdrop-blur">
+            <TabsTrigger value="ai-analyzer" className="data-[state=active]:bg-primary/10">
+              <Brain className="h-4 w-4 mr-2" />
+              AI Analyzer
+            </TabsTrigger>
             <TabsTrigger value="recommendations" className="data-[state=active]:bg-primary/10">
               <TrendingUp className="h-4 w-4 mr-2" />
-              Recommendations
+              Daily Picks
             </TabsTrigger>
             <TabsTrigger value="paper" className="data-[state=active]:bg-primary/10">
               <LineChart className="h-4 w-4 mr-2" />
@@ -163,6 +168,10 @@ const Index = () => {
               Backtesting
             </TabsTrigger>
           </TabsList>
+          
+          <TabsContent value="ai-analyzer" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <AIStockAnalyzer />
+          </TabsContent>
           
           <TabsContent value="recommendations" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <TopGainers />
