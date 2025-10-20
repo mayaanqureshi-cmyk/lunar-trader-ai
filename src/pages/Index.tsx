@@ -5,11 +5,12 @@ import { Backtesting } from "@/components/Backtesting";
 import { TradingNotifications } from "@/components/TradingNotifications";
 import { AIStockAnalyzer } from "@/components/AIStockAnalyzer";
 import { TechnicalAnalysis } from "@/components/TechnicalAnalysis";
+import { AlpacaAutoTrading } from "@/components/AlpacaAutoTrading";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
-import { TrendingUp, Bot, LineChart, AlertTriangle, Brain, Activity } from "lucide-react";
+import { TrendingUp, Bot, LineChart, AlertTriangle, Brain, Activity, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface TradingSignal {
@@ -150,8 +151,12 @@ const Index = () => {
         </div>
 
         {/* Main Features */}
-        <Tabs defaultValue="technical" className="w-full">
-          <TabsList className="grid w-full grid-cols-5 mb-6 bg-card/50 backdrop-blur">
+        <Tabs defaultValue="auto-trade" className="w-full">
+          <TabsList className="grid w-full grid-cols-6 mb-6 bg-card/50 backdrop-blur">
+            <TabsTrigger value="auto-trade" className="data-[state=active]:bg-primary/10">
+              <Zap className="h-4 w-4 mr-2" />
+              Auto-Trade
+            </TabsTrigger>
             <TabsTrigger value="technical" className="data-[state=active]:bg-primary/10">
               <Activity className="h-4 w-4 mr-2" />
               Technical
@@ -173,6 +178,10 @@ const Index = () => {
               Backtesting
             </TabsTrigger>
           </TabsList>
+          
+          <TabsContent value="auto-trade" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <AlpacaAutoTrading />
+          </TabsContent>
           
           <TabsContent value="technical" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <TechnicalAnalysis />
