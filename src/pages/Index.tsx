@@ -27,6 +27,8 @@ interface TradingSignal {
 const Index = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAutoTradingEnabled, setIsAutoTradingEnabled] = useState(false);
+  const [maxPositionSize, setMaxPositionSize] = useState(100);
 
   // Fetch trading signals
   useEffect(() => {
@@ -180,7 +182,10 @@ const Index = () => {
           </TabsList>
           
           <TabsContent value="auto-trade" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <AlpacaAutoTrading />
+            <AlpacaAutoTrading 
+              onAutoTradingChange={setIsAutoTradingEnabled}
+              onMaxPositionSizeChange={setMaxPositionSize}
+            />
           </TabsContent>
           
           <TabsContent value="technical" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -188,7 +193,10 @@ const Index = () => {
           </TabsContent>
           
           <TabsContent value="ai-analyzer" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <AIStockAnalyzer />
+            <AIStockAnalyzer 
+              isAutoTradingEnabled={isAutoTradingEnabled}
+              maxPositionSize={maxPositionSize}
+            />
           </TabsContent>
           
           <TabsContent value="recommendations" className="animate-in fade-in slide-in-from-bottom-4 duration-500">

@@ -20,7 +20,12 @@ interface TradeOrder {
   filled_avg_price: string | null;
 }
 
-export const AlpacaAutoTrading = () => {
+interface AlpacaAutoTradingProps {
+  onAutoTradingChange?: (enabled: boolean) => void;
+  onMaxPositionSizeChange?: (size: number) => void;
+}
+
+export const AlpacaAutoTrading = ({ onAutoTradingChange, onMaxPositionSizeChange }: AlpacaAutoTradingProps) => {
   const [isEnabled, setIsEnabled] = useState(false);
   const [maxPositionSize, setMaxPositionSize] = useState("100");
   const [orders, setOrders] = useState<TradeOrder[]>([]);
@@ -28,13 +33,21 @@ export const AlpacaAutoTrading = () => {
   const { toast } = useToast();
 
   const handleToggleAutoTrading = () => {
-    setIsEnabled(!isEnabled);
+    const newState = !isEnabled;
+    setIsEnabled(newState);
+    onAutoTradingChange?.(newState);
     toast({
-      title: isEnabled ? "Auto-Trading Disabled" : "Auto-Trading Enabled",
-      description: isEnabled 
-        ? "The system will no longer execute trades automatically" 
-        : "The system will now execute AI-recommended trades automatically",
+      title: newState ? "Auto-Trading Enabled" : "Auto-Trading Disabled",
+      description: newState 
+        ? "The system will now execute AI-recommended trades automatically" 
+        : "The system will no longer execute trades automatically",
     });
+  };
+
+  const handleMaxPositionSizeChange = (value: string) => {
+    setMaxPositionSize(value);
+    const numValue = parseInt(value) || 100;
+    onMaxPositionSizeChange?.(numValue);
   };
 
   const executeTestTrade = async () => {
@@ -147,7 +160,7 @@ export const AlpacaAutoTrading = () => {
             <Input 
               type="number"
               value={maxPositionSize}
-              onChange={(e) => setMaxPositionSize(e.target.value)}
+              onChange={(e) => handleMaxPositionSizeChange(e.target.value)}
               placeholder="100"
               className="bg-background"
             />

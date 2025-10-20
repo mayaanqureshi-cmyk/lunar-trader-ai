@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Brain, TrendingUp, AlertCircle, Target, Clock, Shield } from "lucide-react";
+import { Brain, TrendingUp, AlertCircle, Target, Clock, Shield, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -26,10 +26,57 @@ interface AnalysisResult {
   recommendations: StockRecommendation[];
 }
 
-export const AIStockAnalyzer = () => {
+interface AIStockAnalyzerProps {
+  isAutoTradingEnabled?: boolean;
+  maxPositionSize?: number;
+}
+
+export const AIStockAnalyzer = ({ isAutoTradingEnabled = false, maxPositionSize = 100 }: AIStockAnalyzerProps) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
+  const [executingTrades, setExecutingTrades] = useState<Set<string>>(new Set());
   const { toast } = useToast();
+
+  const executeTrade = async (symbol: string, quantity: number) => {
+    setExecutingTrades(prev => new Set(prev).add(symbol));
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('execute-alpaca-trade', {
+        body: {
+          symbol: symbol,
+          action: 'buy',
+          quantity: quantity,
+          orderType: 'market'
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        toast({
+          title: "Trade Executed",
+          description: `Successfully bought ${quantity} shares of ${symbol}`,
+        });
+        return true;
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (error) {
+      console.error("Error executing trade:", error);
+      toast({
+        title: "Trade Failed",
+        description: error instanceof Error ? error.message : "Failed to execute trade",
+        variant: "destructive",
+      });
+      return false;
+    } finally {
+      setExecutingTrades(prev => {
+        const next = new Set(prev);
+        next.delete(symbol);
+        return next;
+      });
+    }
+  };
 
   const handleAnalyze = async () => {
     setIsAnalyzing(true);
@@ -49,6 +96,26 @@ export const AIStockAnalyzer = () => {
         title: "Analysis Complete",
         description: `Found ${data.recommendations.length} high-probability opportunities`,
       });
+
+      // Auto-execute trades for high-confidence recommendations if auto-trading is enabled
+      if (isAutoTradingEnabled && data.recommendations.length > 0) {
+        const highConfidenceStocks = data.recommendations.filter(
+          (stock: StockRecommendation) => stock.confidence_score >= 8 && stock.risk_level <= 6
+        );
+
+        if (highConfidenceStocks.length > 0) {
+          toast({
+            title: "Auto-Trading Activated",
+            description: `Executing ${highConfidenceStocks.length} high-confidence trades...`,
+          });
+
+          for (const stock of highConfidenceStocks) {
+            await executeTrade(stock.symbol, maxPositionSize);
+            // Add delay between trades to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+      }
     } catch (error) {
       console.error("Error analyzing patterns:", error);
       toast({
@@ -213,6 +280,24 @@ export const AIStockAnalyzer = () => {
                         </div>
                       </div>
                     </div>
+
+                    <Button
+                      onClick={() => executeTrade(stock.symbol, maxPositionSize)}
+                      disabled={executingTrades.has(stock.symbol)}
+                      className="w-full mt-4 bg-primary hover:bg-primary/90"
+                    >
+                      {executingTrades.has(stock.symbol) ? (
+                        <>
+                          <Clock className="mr-2 h-4 w-4 animate-spin" />
+                          Executing Trade...
+                        </>
+                      ) : (
+                        <>
+                          <Zap className="mr-2 h-4 w-4" />
+                          Execute Trade ({maxPositionSize} shares)
+                        </>
+                      )}
+                    </Button>
                   </Card>
                 ))}
               </div>
