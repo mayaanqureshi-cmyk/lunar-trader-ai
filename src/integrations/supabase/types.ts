@@ -28,6 +28,7 @@ export type Database = {
           symbol: string
           total_profit_loss: number
           total_trades: number
+          user_id: string | null
           win_rate: number
           winning_trades: number
         }
@@ -44,6 +45,7 @@ export type Database = {
           symbol: string
           total_profit_loss: number
           total_trades: number
+          user_id?: string | null
           win_rate: number
           winning_trades: number
         }
@@ -60,6 +62,7 @@ export type Database = {
           symbol?: string
           total_profit_loss?: number
           total_trades?: number
+          user_id?: string | null
           win_rate?: number
           winning_trades?: number
         }
@@ -69,6 +72,13 @@ export type Database = {
             columns: ["strategy_id"]
             isOneToOne: false
             referencedRelation: "backtest_strategies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "backtest_results_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -82,6 +92,7 @@ export type Database = {
           initial_capital: number
           name: string
           sell_condition: string
+          user_id: string | null
         }
         Insert: {
           buy_condition: string
@@ -91,6 +102,7 @@ export type Database = {
           initial_capital?: number
           name: string
           sell_condition: string
+          user_id?: string | null
         }
         Update: {
           buy_condition?: string
@@ -100,8 +112,17 @@ export type Database = {
           initial_capital?: number
           name?: string
           sell_condition?: string
+          user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "backtest_strategies_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       paper_portfolio: {
         Row: {
@@ -113,6 +134,7 @@ export type Database = {
           quantity: number
           symbol: string
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
@@ -123,6 +145,7 @@ export type Database = {
           quantity: number
           symbol: string
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string
@@ -133,8 +156,17 @@ export type Database = {
           quantity?: number
           symbol?: string
           updated_at?: string
+          user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "paper_portfolio_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       paper_trades: {
         Row: {
@@ -147,6 +179,7 @@ export type Database = {
           symbol: string
           total_value: number
           trade_date: string
+          user_id: string | null
         }
         Insert: {
           action: string
@@ -158,6 +191,7 @@ export type Database = {
           symbol: string
           total_value: number
           trade_date?: string
+          user_id?: string | null
         }
         Update: {
           action?: string
@@ -169,8 +203,17 @@ export type Database = {
           symbol?: string
           total_value?: number
           trade_date?: string
+          user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "paper_trades_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       portfolio: {
         Row: {
@@ -182,6 +225,7 @@ export type Database = {
           quantity: number
           symbol: string
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
@@ -192,6 +236,7 @@ export type Database = {
           quantity: number
           symbol: string
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string
@@ -202,8 +247,100 @@ export type Database = {
           quantity?: number
           symbol?: string
           updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portfolio_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string | null
+          email: string | null
+          full_name: string | null
+          id: string
+          updated_at: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string | null
+          email?: string | null
+          full_name?: string | null
+          id: string
+          updated_at?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string | null
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          updated_at?: string | null
         }
         Relationships: []
+      }
+      trade_audit_log: {
+        Row: {
+          action: string
+          created_at: string | null
+          error_message: string | null
+          id: string
+          ip_address: unknown | null
+          order_id: string | null
+          order_type: string | null
+          price: number | null
+          quantity: number
+          status: string
+          symbol: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          ip_address?: unknown | null
+          order_id?: string | null
+          order_type?: string | null
+          price?: number | null
+          quantity: number
+          status: string
+          symbol: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          ip_address?: unknown | null
+          order_id?: string | null
+          order_type?: string | null
+          price?: number | null
+          quantity?: number
+          status?: string
+          symbol?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trade_audit_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       trading_signals: {
         Row: {
@@ -216,6 +353,7 @@ export type Database = {
           portfolio_id: string | null
           price_change_percent: number
           signal_type: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
@@ -227,6 +365,7 @@ export type Database = {
           portfolio_id?: string | null
           price_change_percent: number
           signal_type: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string
@@ -238,6 +377,7 @@ export type Database = {
           portfolio_id?: string | null
           price_change_percent?: number
           signal_type?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -247,6 +387,42 @@ export type Database = {
             referencedRelation: "portfolio"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "trading_signals_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          created_at: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
     }
@@ -254,10 +430,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "premium" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -384,6 +566,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "premium", "user"],
+    },
   },
 } as const
