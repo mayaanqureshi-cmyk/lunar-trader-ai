@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.analyze-historical-patterns]
 verify_jwt = false
+
+[functions.analyze-multi-timeframe]
+verify_jwt = false
