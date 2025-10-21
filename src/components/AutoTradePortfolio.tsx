@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Wallet, TrendingUp, TrendingDown, DollarSign, RefreshCw } from "lucide-react";
+import { Wallet, TrendingUp, TrendingDown, DollarSign, RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 
@@ -55,6 +55,43 @@ export const AutoTradePortfolio = () => {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSellPosition = async (symbol: string, quantity: string) => {
+    try {
+      toast({
+        title: "Selling Position",
+        description: `Selling ${quantity} shares of ${symbol}...`,
+      });
+      
+      const { data, error } = await supabase.functions.invoke('execute-alpaca-trade', {
+        body: {
+          symbol,
+          action: 'sell',
+          quantity: parseFloat(quantity),
+          orderType: 'market',
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        toast({
+          title: "Position Sold",
+          description: `Successfully sold ${quantity} shares of ${symbol}`,
+        });
+        fetchPortfolio(); // Refresh portfolio after sell
+      } else {
+        throw new Error(data.error || 'Failed to execute sell order');
+      }
+    } catch (error: any) {
+      console.error('Error selling position:', error);
+      toast({
+        title: "Sell Failed",
+        description: error.message || 'Failed to sell position',
+        variant: "destructive",
+      });
     }
   };
 
@@ -175,6 +212,7 @@ export const AutoTradePortfolio = () => {
                     <TableHead className="font-semibold text-right">Cost Basis</TableHead>
                     <TableHead className="font-semibold text-right">P/L</TableHead>
                     <TableHead className="font-semibold text-right">P/L %</TableHead>
+                    <TableHead className="font-semibold text-right">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -210,6 +248,16 @@ export const AutoTradePortfolio = () => {
                         </TableCell>
                         <TableCell className={`text-right font-semibold ${plpc >= 0 ? 'text-success' : 'text-destructive'}`}>
                           {plpc >= 0 ? '+' : ''}{plpc.toFixed(2)}%
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleSellPosition(position.symbol, position.qty)}
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            Sell
+                          </Button>
                         </TableCell>
                       </TableRow>
                     );
