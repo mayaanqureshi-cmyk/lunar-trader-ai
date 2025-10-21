@@ -73,6 +73,7 @@ serve(async (req) => {
         positions: positions.map((pos: any) => ({
           symbol: pos.symbol,
           qty: pos.qty,
+          avg_entry_price: pos.avg_entry_price,
           side: pos.side,
           market_value: pos.market_value,
           cost_basis: pos.cost_basis,
