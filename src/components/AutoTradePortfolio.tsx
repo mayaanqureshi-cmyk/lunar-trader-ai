@@ -169,7 +169,7 @@ export const AutoTradePortfolio = () => {
                   <TableRow className="bg-secondary/50">
                     <TableHead className="font-semibold">Symbol</TableHead>
                     <TableHead className="font-semibold text-right">Quantity</TableHead>
-                    <TableHead className="font-semibold text-right">Avg Entry</TableHead>
+                    <TableHead className="font-semibold text-right">Average Entry</TableHead>
                     <TableHead className="font-semibold text-right">Current Price</TableHead>
                     <TableHead className="font-semibold text-right">Market Value</TableHead>
                     <TableHead className="font-semibold text-right">Cost Basis</TableHead>
