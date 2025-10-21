@@ -76,7 +76,20 @@ Return ONLY a JSON array with 1-2 stocks in this exact format:
     "confidence": 0.85,
     "reasoning": "Strong momentum, RSI oversold bounce, institutional buying",
     "priceTarget": 145.50,
-    "stopLoss": 142.00
+    "stopLoss": 142.00,
+    "technicalIndicators": {
+      "rsi": "Oversold at 32, bouncing back",
+      "macd": "Bullish crossover confirmed",
+      "volume": "Above average by 140%",
+      "movingAverages": "Price above 50-day MA, approaching 200-day"
+    },
+    "fundamentals": {
+      "sentiment": "Bullish institutional buying",
+      "newsImpact": "Positive earnings catalyst expected",
+      "sectorStrength": "Tech sector showing relative strength"
+    },
+    "riskReward": "1:3 risk/reward ratio",
+    "timeframe": "1-3 day swing trade"
   }
 ]
 
@@ -85,6 +98,8 @@ Criteria for recommendation:
 - Clear technical setup with multiple confirmations
 - Strong volume and momentum
 - Risk/reward ratio >1:2
+- Provide detailed technical analysis for each indicator
+- Include fundamental sentiment and news impact
 
 If no stocks meet criteria, return empty array: []`;
 
@@ -235,6 +250,15 @@ If no stocks meet criteria, return empty array: []`;
             quantity,
             orderId: orderData.id,
             confidence: rec.confidence,
+            entryPrice: currentPrice,
+            stopLoss: stopLossPrice,
+            takeProfit: takeProfitPrice,
+            reasoning: rec.reasoning,
+            technicalIndicators: rec.technicalIndicators || {},
+            fundamentals: rec.fundamentals || {},
+            riskReward: rec.riskReward || 'N/A',
+            timeframe: rec.timeframe || 'N/A',
+            timestamp: new Date().toISOString(),
           });
 
           console.log(`✅ Trade executed: ${rec.symbol}`);

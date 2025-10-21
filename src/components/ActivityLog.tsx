@@ -145,25 +145,134 @@ export const ActivityLog = () => {
                   )}
 
                   {log.trades_data && Array.isArray(log.trades_data) && log.trades_data.length > 0 && (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {log.trades_data.map((trade: any, idx: number) => (
-                        <div
+                        <Card
                           key={idx}
-                          className="flex items-center justify-between p-3 bg-background rounded-lg border border-border"
+                          className="p-4 bg-background border border-primary/20 hover:border-primary/40 transition-all"
                         >
-                          <div className="flex items-center gap-3">
-                            <TrendingUp className="h-4 w-4 text-success" />
-                            <div>
-                              <p className="font-bold text-foreground">{trade.symbol}</p>
-                              <p className="text-xs text-muted-foreground">
-                                Qty: {trade.quantity} | Order: {trade.orderId?.substring(0, 8)}...
-                              </p>
+                          <div className="space-y-3">
+                            {/* Header */}
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 bg-success/10 rounded-lg">
+                                  <TrendingUp className="h-5 w-5 text-success" />
+                                </div>
+                                <div>
+                                  <p className="font-bold text-lg text-foreground">{trade.symbol}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Order: {trade.orderId?.substring(0, 12)}...
+                                  </p>
+                                </div>
+                              </div>
+                              <Badge variant="default" className="text-sm">
+                                {(trade.confidence * 100).toFixed(0)}% confidence
+                              </Badge>
+                            </div>
+
+                            {/* Trade Details */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3 bg-secondary/20 rounded-lg">
+                              <div>
+                                <p className="text-xs text-muted-foreground">Quantity</p>
+                                <p className="font-semibold text-foreground">{trade.quantity}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Entry Price</p>
+                                <p className="font-semibold text-foreground">${trade.entryPrice?.toFixed(2)}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Stop Loss</p>
+                                <p className="font-semibold text-destructive">${trade.stopLoss?.toFixed(2)}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Take Profit</p>
+                                <p className="font-semibold text-success">${trade.takeProfit?.toFixed(2)}</p>
+                              </div>
+                            </div>
+
+                            {/* Rationale */}
+                            {trade.reasoning && (
+                              <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
+                                <p className="text-xs font-semibold text-primary mb-1">Trade Rationale</p>
+                                <p className="text-sm text-foreground">{trade.reasoning}</p>
+                              </div>
+                            )}
+
+                            {/* Technical Indicators */}
+                            {trade.technicalIndicators && Object.keys(trade.technicalIndicators).length > 0 && (
+                              <div className="p-3 bg-secondary/10 rounded-lg">
+                                <p className="text-xs font-semibold text-foreground mb-2">Technical Analysis</p>
+                                <div className="space-y-1">
+                                  {trade.technicalIndicators.rsi && (
+                                    <div className="flex justify-between text-xs">
+                                      <span className="text-muted-foreground">RSI:</span>
+                                      <span className="text-foreground">{trade.technicalIndicators.rsi}</span>
+                                    </div>
+                                  )}
+                                  {trade.technicalIndicators.macd && (
+                                    <div className="flex justify-between text-xs">
+                                      <span className="text-muted-foreground">MACD:</span>
+                                      <span className="text-foreground">{trade.technicalIndicators.macd}</span>
+                                    </div>
+                                  )}
+                                  {trade.technicalIndicators.volume && (
+                                    <div className="flex justify-between text-xs">
+                                      <span className="text-muted-foreground">Volume:</span>
+                                      <span className="text-foreground">{trade.technicalIndicators.volume}</span>
+                                    </div>
+                                  )}
+                                  {trade.technicalIndicators.movingAverages && (
+                                    <div className="flex justify-between text-xs">
+                                      <span className="text-muted-foreground">Moving Averages:</span>
+                                      <span className="text-foreground">{trade.technicalIndicators.movingAverages}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Fundamentals */}
+                            {trade.fundamentals && Object.keys(trade.fundamentals).length > 0 && (
+                              <div className="p-3 bg-secondary/10 rounded-lg">
+                                <p className="text-xs font-semibold text-foreground mb-2">Fundamental Analysis</p>
+                                <div className="space-y-1">
+                                  {trade.fundamentals.sentiment && (
+                                    <div className="flex justify-between text-xs">
+                                      <span className="text-muted-foreground">Sentiment:</span>
+                                      <span className="text-foreground">{trade.fundamentals.sentiment}</span>
+                                    </div>
+                                  )}
+                                  {trade.fundamentals.newsImpact && (
+                                    <div className="flex justify-between text-xs">
+                                      <span className="text-muted-foreground">News Impact:</span>
+                                      <span className="text-foreground">{trade.fundamentals.newsImpact}</span>
+                                    </div>
+                                  )}
+                                  {trade.fundamentals.sectorStrength && (
+                                    <div className="flex justify-between text-xs">
+                                      <span className="text-muted-foreground">Sector:</span>
+                                      <span className="text-foreground">{trade.fundamentals.sectorStrength}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Risk/Reward & Timeframe */}
+                            <div className="flex gap-2">
+                              {trade.riskReward && trade.riskReward !== 'N/A' && (
+                                <Badge variant="outline" className="text-xs">
+                                  R/R: {trade.riskReward}
+                                </Badge>
+                              )}
+                              {trade.timeframe && trade.timeframe !== 'N/A' && (
+                                <Badge variant="outline" className="text-xs">
+                                  {trade.timeframe}
+                                </Badge>
+                              )}
                             </div>
                           </div>
-                          <Badge variant="default">
-                            {(trade.confidence * 100).toFixed(0)}% confidence
-                          </Badge>
-                        </div>
+                        </Card>
                       ))}
                     </div>
                   )}
