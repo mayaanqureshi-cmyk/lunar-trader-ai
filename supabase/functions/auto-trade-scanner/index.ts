@@ -40,14 +40,20 @@ serve(async (req) => {
       });
     }
 
-    // Check market hours (9:30 AM - 4:00 PM ET)
-    const now = new Date();
-    const etHour = now.getUTCHours() - 5; // Convert to ET
-    const isMarketHours = etHour >= 9.5 && etHour < 16;
-    
-    if (!isMarketHours) {
-      console.log('⏰ Outside market hours, skipping');
-      return new Response(JSON.stringify({ success: true, message: 'Outside market hours' }), {
+    // Check real market status via Alpaca clock
+    const clockResp = await fetch('https://paper-api.alpaca.markets/v2/clock', {
+      headers: {
+        'APCA-API-KEY-ID': ALPACA_API_KEY,
+        'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
+      },
+    });
+    if (!clockResp.ok) {
+      throw new Error('Failed to fetch Alpaca market clock');
+    }
+    const clock = await clockResp.json();
+    if (!clock.is_open) {
+      console.log('⏰ Market is closed, skipping');
+      return new Response(JSON.stringify({ success: true, message: 'Market closed' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
@@ -239,6 +245,18 @@ If no stocks meet criteria, return empty array: []`;
       } catch (tradeError) {
         console.error(`❌ Trade error for ${rec.symbol}:`, tradeError);
       }
+    }
+
+    // Log to database
+    try {
+      await supabase.from('auto_trade_logs').insert({
+        scanned: symbolsToScan.length,
+        recommendations: recommendations.length,
+        trades_executed: tradesExecuted.length,
+        trades_data: tradesExecuted,
+      });
+    } catch (e) {
+      console.error('Failed to log auto trade run:', e);
     }
 
     return new Response(

@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      auto_trade_logs: {
+        Row: {
+          created_at: string | null
+          error: string | null
+          id: string
+          recommendations: number | null
+          scanned: number | null
+          trades_data: Json | null
+          trades_executed: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          error?: string | null
+          id?: string
+          recommendations?: number | null
+          scanned?: number | null
+          trades_data?: Json | null
+          trades_executed?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          error?: string | null
+          id?: string
+          recommendations?: number | null
+          scanned?: number | null
+          trades_data?: Json | null
+          trades_executed?: number | null
+        }
+        Relationships: []
+      }
       backtest_results: {
         Row: {
           created_at: string
