@@ -79,22 +79,62 @@ export const AIStockAnalyzer = ({ isAutoTradingEnabled, maxPositionSize }: AISto
       if (accountError) throw accountError;
 
       const buyingPower = parseFloat(accountData.account.buying_power);
-      const tradeAmount = Math.min(maxPositionSize, buyingPower * 0.1); // Use 10% of buying power or max position size
+      const portfolioValue = parseFloat(accountData.account.portfolio_value);
+      
+      // Get auto-trading settings from localStorage
+      const maxPortfolioRisk = parseFloat(localStorage.getItem('maxPortfolioRisk') || '2');
+      const useKellyCriterion = JSON.parse(localStorage.getItem('useKellyCriterion') || 'true');
+      const stopLossPercent = parseFloat(localStorage.getItem('stopLossPercent') || '2');
+      const takeProfitPercent = parseFloat(localStorage.getItem('takeProfitPercent') || '6');
+      
+      // Calculate position size using risk management
+      let positionSize;
+      const currentPrice = analysis.priceTarget || 100;
+      
+      if (useKellyCriterion && analysis.confidence > 0) {
+        // Kelly Criterion: f* = (bp - q) / b
+        // where b = win/loss ratio, p = win probability, q = loss probability
+        const winRate = analysis.confidence;
+        const riskRewardRatio = takeProfitPercent / stopLossPercent;
+        const kellyfraction = (winRate * riskRewardRatio - (1 - winRate)) / riskRewardRatio;
+        
+        // Use half-Kelly for safety
+        const kellyPercent = Math.max(0.5, Math.min(kellyfraction * 0.5 * 100, maxPortfolioRisk));
+        positionSize = (portfolioValue * kellyPercent / 100) / currentPrice;
+      } else {
+        // Fixed percentage risk
+        const maxRiskAmount = portfolioValue * (maxPortfolioRisk / 100);
+        const riskPerShare = currentPrice * (stopLossPercent / 100);
+        positionSize = maxRiskAmount / riskPerShare;
+      }
+      
+      // Cap position size by max position size setting and buying power
+      const maxShares = Math.min(
+        Math.floor(maxPositionSize / currentPrice),
+        Math.floor(buyingPower / currentPrice)
+      );
+      const quantity = Math.max(1, Math.min(Math.floor(positionSize), maxShares));
+      
+      // Calculate stop-loss and take-profit prices
+      const stopLossPrice = currentPrice * (1 - stopLossPercent / 100);
+      const takeProfitPrice = currentPrice * (1 + takeProfitPercent / 100);
       
       const { error: tradeError } = await supabase.functions.invoke("execute-alpaca-trade", {
         body: {
           symbol: analysis.symbol,
-          qty: Math.floor(tradeAmount / (analysis.priceTarget || 100)),
+          qty: quantity,
           side: "buy",
           type: "market",
+          stop_loss: stopLossPrice,
+          take_profit: takeProfitPrice,
         },
       });
 
       if (tradeError) throw tradeError;
 
       toast({
-        title: "Auto-Trade Executed",
-        description: `Bought ${analysis.symbol} - AI Confidence: ${(analysis.confidence * 100).toFixed(0)}%`,
+        title: "Smart Auto-Trade Executed",
+        description: `Bought ${quantity} shares of ${analysis.symbol} with SL: $${stopLossPrice.toFixed(2)}, TP: $${takeProfitPrice.toFixed(2)}`,
       });
     } catch (error: any) {
       console.error("Auto-trade error:", error);

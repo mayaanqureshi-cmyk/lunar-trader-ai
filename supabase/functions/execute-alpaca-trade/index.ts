@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { symbol, action, quantity, orderType = 'market', limit_price, stop_price } = await req.json();
+    const { symbol, action, quantity, orderType = 'market', limit_price, stop_price, stop_loss, take_profit } = await req.json();
     
     console.log(`Executing ${action} order for ${symbol}, quantity: ${quantity}, type: ${orderType}`);
 
@@ -76,6 +76,58 @@ serve(async (req) => {
 
     const orderData = await orderResponse.json();
     console.log('Order placed successfully:', orderData.id);
+
+    // Place bracket orders for stop-loss and take-profit if provided
+    if (action.toLowerCase() === 'buy' && (stop_loss || take_profit)) {
+      const bracketOrders = [];
+
+      if (stop_loss) {
+        const stopLossPayload = {
+          symbol: symbol.toUpperCase(),
+          qty: quantity,
+          side: 'sell',
+          type: 'stop',
+          stop_price: stop_loss,
+          time_in_force: 'gtc',
+        };
+        bracketOrders.push(
+          fetch('https://paper-api.alpaca.markets/v2/orders', {
+            method: 'POST',
+            headers: {
+              'APCA-API-KEY-ID': ALPACA_API_KEY,
+              'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(stopLossPayload),
+          })
+        );
+      }
+
+      if (take_profit) {
+        const takeProfitPayload = {
+          symbol: symbol.toUpperCase(),
+          qty: quantity,
+          side: 'sell',
+          type: 'limit',
+          limit_price: take_profit,
+          time_in_force: 'gtc',
+        };
+        bracketOrders.push(
+          fetch('https://paper-api.alpaca.markets/v2/orders', {
+            method: 'POST',
+            headers: {
+              'APCA-API-KEY-ID': ALPACA_API_KEY,
+              'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(takeProfitPayload),
+          })
+        );
+      }
+
+      await Promise.all(bracketOrders);
+      console.log('Bracket orders placed for stop-loss and take-profit');
+    }
 
     return new Response(
       JSON.stringify({

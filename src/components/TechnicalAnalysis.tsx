@@ -18,18 +18,27 @@ interface TechnicalData {
     pattern: string;
     sma20: number;
     sma50: number;
+    sma200: number;
     priceVsSMA20: string;
     priceVsSMA50: string;
+    bollingerBands: { upper: number; middle: number; lower: number; bandwidth: number };
+    bbPosition: string;
+    atr: number;
+    atrPercent: string;
+    adx: number;
+    stochastic: { k: number; d: number };
   };
   weekly: {
     rsi: number;
     macd: { macd: number; signal: number; histogram: number };
     pattern: string;
     sma20: number;
+    adx: number;
   };
   monthly: {
     rsi: number;
     pattern: string;
+    adx: number;
   };
 }
 
@@ -174,6 +183,31 @@ export const TechnicalAnalysis = () => {
                         </div>
                       </div>
                       <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">Stochastic</p>
+                        <p className={`text-2xl font-bold ${stock.daily.stochastic.k > 80 ? 'text-red-500' : stock.daily.stochastic.k < 20 ? 'text-green-500' : 'text-muted-foreground'}`}>
+                          {stock.daily.stochastic.k.toFixed(1)}
+                        </p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">ADX (Trend)</p>
+                        <p className={`text-2xl font-bold ${stock.daily.adx > 25 ? 'text-green-500' : 'text-muted-foreground'}`}>
+                          {stock.daily.adx.toFixed(1)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4">
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">ATR</p>
+                        <p className="text-xl font-bold">${stock.daily.atr.toFixed(2)}</p>
+                        <p className="text-xs text-muted-foreground">{stock.daily.atrPercent}%</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">BB Position</p>
+                        <p className="text-xl font-bold">{stock.daily.bbPosition}%</p>
+                        <p className="text-xs text-muted-foreground">BW: {stock.daily.bollingerBands.bandwidth.toFixed(2)}%</p>
+                      </div>
+                      <div className="space-y-1">
                         <p className="text-sm text-muted-foreground">Volume</p>
                         <Badge variant={stock.daily.volumeTrend === "surging" ? "default" : "secondary"}>
                           {stock.daily.volumeTrend}
@@ -186,17 +220,28 @@ export const TechnicalAnalysis = () => {
                         </p>
                       </div>
                     </div>
-                    <div className="pt-4 border-t">
+
+                    <div className="pt-4 border-t space-y-2">
+                      <p className="text-sm text-muted-foreground mb-2">Bollinger Bands</p>
+                      <div className="space-y-1 text-sm">
+                        <p>Upper: <span className="font-bold">${stock.daily.bollingerBands.upper.toFixed(2)}</span></p>
+                        <p>Middle: <span className="font-bold">${stock.daily.bollingerBands.middle.toFixed(2)}</span></p>
+                        <p>Lower: <span className="font-bold">${stock.daily.bollingerBands.lower.toFixed(2)}</span></p>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 border-t space-y-2">
                       <p className="text-sm text-muted-foreground mb-2">Moving Averages</p>
-                      <div className="space-y-1">
-                        <p className="text-sm">SMA 20: ${stock.daily.sma20.toFixed(2)}</p>
-                        <p className="text-sm">SMA 50: ${stock.daily.sma50.toFixed(2)}</p>
+                      <div className="space-y-1 text-sm">
+                        <p>SMA 20: <span className="font-bold">${stock.daily.sma20.toFixed(2)}</span></p>
+                        <p>SMA 50: <span className="font-bold">${stock.daily.sma50.toFixed(2)}</span></p>
+                        <p>SMA 200: <span className="font-bold">${stock.daily.sma200.toFixed(2)}</span></p>
                       </div>
                     </div>
                   </TabsContent>
 
                   <TabsContent value="weekly" className="space-y-4">
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <div className="space-y-1">
                         <p className="text-sm text-muted-foreground">RSI</p>
                         <p className={`text-2xl font-bold ${getRSIColor(stock.weekly.rsi)}`}>
@@ -213,6 +258,12 @@ export const TechnicalAnalysis = () => {
                         </div>
                       </div>
                       <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">ADX</p>
+                        <p className={`text-2xl font-bold ${stock.weekly.adx > 25 ? 'text-green-500' : 'text-muted-foreground'}`}>
+                          {stock.weekly.adx.toFixed(1)}
+                        </p>
+                      </div>
+                      <div className="space-y-1">
                         <p className="text-sm text-muted-foreground">Pattern</p>
                         <Badge>{stock.weekly.pattern.replace(/_/g, " ")}</Badge>
                       </div>
@@ -220,11 +271,17 @@ export const TechnicalAnalysis = () => {
                   </TabsContent>
 
                   <TabsContent value="monthly" className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                       <div className="space-y-1">
                         <p className="text-sm text-muted-foreground">RSI</p>
                         <p className={`text-2xl font-bold ${getRSIColor(stock.monthly.rsi)}`}>
                           {stock.monthly.rsi.toFixed(1)}
+                        </p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">ADX</p>
+                        <p className={`text-2xl font-bold ${stock.monthly.adx > 25 ? 'text-green-500' : 'text-muted-foreground'}`}>
+                          {stock.monthly.adx.toFixed(1)}
                         </p>
                       </div>
                       <div className="space-y-1">

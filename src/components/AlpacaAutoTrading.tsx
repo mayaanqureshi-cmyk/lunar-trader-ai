@@ -26,6 +26,22 @@ export const AlpacaAutoTrading = ({ onAutoTradingChange, onMaxPositionSizeChange
     const saved = localStorage.getItem('minConfidence');
     return saved ? Number(saved) : 0.7;
   });
+  const [maxPortfolioRisk, setMaxPortfolioRisk] = useState(() => {
+    const saved = localStorage.getItem('maxPortfolioRisk');
+    return saved ? Number(saved) : 2;
+  });
+  const [useKellyCriterion, setUseKellyCriterion] = useState(() => {
+    const saved = localStorage.getItem('useKellyCriterion');
+    return saved ? JSON.parse(saved) : true;
+  });
+  const [stopLossPercent, setStopLossPercent] = useState(() => {
+    const saved = localStorage.getItem('stopLossPercent');
+    return saved ? Number(saved) : 2;
+  });
+  const [takeProfitPercent, setTakeProfitPercent] = useState(() => {
+    const saved = localStorage.getItem('takeProfitPercent');
+    return saved ? Number(saved) : 6;
+  });
 
   useEffect(() => {
     localStorage.setItem('autoTradingEnabled', JSON.stringify(isEnabled));
@@ -40,6 +56,22 @@ export const AlpacaAutoTrading = ({ onAutoTradingChange, onMaxPositionSizeChange
   useEffect(() => {
     localStorage.setItem('minConfidence', String(minConfidence));
   }, [minConfidence]);
+
+  useEffect(() => {
+    localStorage.setItem('maxPortfolioRisk', String(maxPortfolioRisk));
+  }, [maxPortfolioRisk]);
+
+  useEffect(() => {
+    localStorage.setItem('useKellyCriterion', JSON.stringify(useKellyCriterion));
+  }, [useKellyCriterion]);
+
+  useEffect(() => {
+    localStorage.setItem('stopLossPercent', String(stopLossPercent));
+  }, [stopLossPercent]);
+
+  useEffect(() => {
+    localStorage.setItem('takeProfitPercent', String(takeProfitPercent));
+  }, [takeProfitPercent]);
 
   const handleToggle = (checked: boolean) => {
     setIsEnabled(checked);
@@ -133,6 +165,78 @@ export const AlpacaAutoTrading = ({ onAutoTradingChange, onMaxPositionSizeChange
             <p className="text-xs text-muted-foreground">
               Only execute trades with AI confidence above this threshold
             </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="max-risk" className="text-sm font-semibold">
+              Max Portfolio Risk per Trade (%)
+            </Label>
+            <Input
+              id="max-risk"
+              type="number"
+              min="0.5"
+              max="5"
+              step="0.5"
+              value={maxPortfolioRisk}
+              onChange={(e) => setMaxPortfolioRisk(Number(e.target.value))}
+              disabled={!isEnabled}
+              className="bg-background"
+            />
+            <p className="text-xs text-muted-foreground">
+              Maximum % of portfolio to risk per trade (recommended: 1-2%)
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="kelly" className="text-sm font-semibold">
+                Use Kelly Criterion for Position Sizing
+              </Label>
+              <Switch
+                id="kelly"
+                checked={useKellyCriterion}
+                onCheckedChange={setUseKellyCriterion}
+                disabled={!isEnabled}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Mathematically optimal position sizing based on win rate and R/R
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="stop-loss" className="text-sm font-semibold">
+                Stop Loss (%)
+              </Label>
+              <Input
+                id="stop-loss"
+                type="number"
+                min="0.5"
+                max="10"
+                step="0.5"
+                value={stopLossPercent}
+                onChange={(e) => setStopLossPercent(Number(e.target.value))}
+                disabled={!isEnabled}
+                className="bg-background"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="take-profit" className="text-sm font-semibold">
+                Take Profit (%)
+              </Label>
+              <Input
+                id="take-profit"
+                type="number"
+                min="1"
+                max="50"
+                step="1"
+                value={takeProfitPercent}
+                onChange={(e) => setTakeProfitPercent(Number(e.target.value))}
+                disabled={!isEnabled}
+                className="bg-background"
+              />
+            </div>
           </div>
         </div>
 

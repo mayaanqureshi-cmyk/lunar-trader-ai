@@ -6,25 +6,49 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Technical indicator calculations
+// Advanced technical indicator calculations
 function calculateRSI(prices: number[], period = 14): number {
   if (prices.length < period + 1) return 50;
-  
-  let gains = 0;
-  let losses = 0;
-  
+  let gains = 0, losses = 0;
   for (let i = prices.length - period; i < prices.length; i++) {
     const change = prices[i] - prices[i - 1];
     if (change > 0) gains += change;
     else losses += Math.abs(change);
   }
-  
-  const avgGain = gains / period;
-  const avgLoss = losses / period;
-  
+  const avgGain = gains / period, avgLoss = losses / period;
   if (avgLoss === 0) return 100;
-  const rs = avgGain / avgLoss;
-  return 100 - (100 / (1 + rs));
+  return 100 - (100 / (1 + avgGain / avgLoss));
+}
+
+function calculateStochastic(highs: number[], lows: number[], closes: number[], period = 14): { k: number, d: number } {
+  if (closes.length < period) return { k: 50, d: 50 };
+  const recentHighs = highs.slice(-period), recentLows = lows.slice(-period);
+  const highestHigh = Math.max(...recentHighs), lowestLow = Math.min(...recentLows);
+  const k = ((closes[closes.length - 1] - lowestLow) / (highestHigh - lowestLow)) * 100;
+  return { k, d: k }; // Simplified
+}
+
+function calculateATR(highs: number[], lows: number[], closes: number[], period = 14): number {
+  if (closes.length < period + 1) return 0;
+  const trueRanges = [];
+  for (let i = 1; i < closes.length; i++) {
+    trueRanges.push(Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i - 1]), Math.abs(lows[i] - closes[i - 1])));
+  }
+  return trueRanges.slice(-period).reduce((a, b) => a + b, 0) / period;
+}
+
+function calculateBollingerBands(prices: number[], period = 20): { upper: number, middle: number, lower: number, bandwidth: number } {
+  if (prices.length < period) return { upper: 0, middle: 0, lower: 0, bandwidth: 0 };
+  const sma = calculateSMA(prices, period);
+  const stdDev = Math.sqrt(prices.slice(-period).reduce((sum, p) => sum + Math.pow(p - sma, 2), 0) / period);
+  return { upper: sma + 2 * stdDev, middle: sma, lower: sma - 2 * stdDev, bandwidth: (4 * stdDev / sma) * 100 };
+}
+
+function calculateADX(highs: number[], lows: number[], closes: number[], period = 14): number {
+  if (closes.length < period + 1) return 0;
+  const atr = calculateATR(highs, lows, closes, period);
+  if (atr === 0) return 0;
+  return Math.min(100, (atr / closes[closes.length - 1]) * 100 * 10); // Simplified
 }
 
 function calculateMACD(prices: number[]): { macd: number, signal: number, histogram: number } {
@@ -96,81 +120,62 @@ async function fetchYahooData(symbol: string, interval: string, range: string) {
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=${interval}&range=${range}`;
     const response = await fetch(url);
     const data = await response.json();
-    
-    if (!data.chart?.result?.[0]) {
-      throw new Error(`No data for ${symbol}`);
-    }
-    
+    if (!data.chart?.result?.[0]) throw new Error(`No data for ${symbol}`);
     const result = data.chart.result[0];
     const quotes = result.indicators.quote[0];
-    
     return {
-      prices: quotes.close.filter((p: number) => p !== null),
-      volumes: quotes.volume.filter((v: number) => v !== null),
-      timestamps: result.timestamp,
+      close: quotes.close.filter((p: number) => p !== null),
+      high: quotes.high.filter((p: number) => p !== null),
+      low: quotes.low.filter((p: number) => p !== null),
+      volume: quotes.volume.filter((v: number) => v !== null),
     };
   } catch (error) {
-    console.error(`Error fetching ${symbol} ${interval}:`, error);
+    console.error(`Error fetching ${symbol}:`, error);
     return null;
   }
 }
 
 async function analyzeStock(symbol: string) {
-  console.log(`Analyzing ${symbol} across timeframes...`);
-  
-  // Fetch multiple timeframes
   const [daily, weekly, monthly] = await Promise.all([
-    fetchYahooData(symbol, "1d", "3mo"),
-    fetchYahooData(symbol, "1wk", "1y"),
+    fetchYahooData(symbol, "1d", "6mo"),
+    fetchYahooData(symbol, "1wk", "2y"),
     fetchYahooData(symbol, "1mo", "5y"),
   ]);
+  if (!daily || !weekly || !monthly) return null;
   
-  if (!daily || !weekly || !monthly) {
-    return null;
-  }
-  
-  // Daily analysis
-  const dailyRSI = calculateRSI(daily.prices);
-  const dailyMACD = calculateMACD(daily.prices);
-  const dailyVolume = analyzeVolumeTrend(daily.volumes);
-  const dailyPattern = detectPattern(daily.prices);
-  const dailySMA20 = calculateSMA(daily.prices, 20);
-  const dailySMA50 = calculateSMA(daily.prices, 50);
-  
-  // Weekly analysis
-  const weeklyRSI = calculateRSI(weekly.prices);
-  const weeklyMACD = calculateMACD(weekly.prices);
-  const weeklyPattern = detectPattern(weekly.prices);
-  const weeklySMA20 = calculateSMA(weekly.prices, 20);
-  
-  // Monthly analysis
-  const monthlyRSI = calculateRSI(monthly.prices);
-  const monthlyPattern = detectPattern(monthly.prices);
-  
-  const currentPrice = daily.prices[daily.prices.length - 1];
+  const currentPrice = daily.close[daily.close.length - 1];
+  const dailySMA20 = calculateSMA(daily.close, 20), dailySMA50 = calculateSMA(daily.close, 50), dailySMA200 = calculateSMA(daily.close, 200);
+  const dailyBB = calculateBollingerBands(daily.close);
+  const dailyATR = calculateATR(daily.high, daily.low, daily.close);
   
   return {
-    symbol,
-    currentPrice,
+    symbol, currentPrice,
     daily: {
-      rsi: dailyRSI,
-      macd: dailyMACD,
-      volumeTrend: dailyVolume,
-      pattern: dailyPattern,
-      sma20: dailySMA20,
-      sma50: dailySMA50,
+      rsi: calculateRSI(daily.close),
+      macd: calculateMACD(daily.close),
+      volumeTrend: analyzeVolumeTrend(daily.volume),
+      pattern: detectPattern(daily.close),
+      sma20: dailySMA20, sma50: dailySMA50, sma200: dailySMA200,
       priceVsSMA20: ((currentPrice - dailySMA20) / dailySMA20 * 100).toFixed(2),
       priceVsSMA50: ((currentPrice - dailySMA50) / dailySMA50 * 100).toFixed(2),
+      bollingerBands: dailyBB,
+      bbPosition: ((currentPrice - dailyBB.lower) / (dailyBB.upper - dailyBB.lower) * 100).toFixed(1),
+      atr: dailyATR,
+      atrPercent: ((dailyATR / currentPrice) * 100).toFixed(2),
+      adx: calculateADX(daily.high, daily.low, daily.close),
+      stochastic: calculateStochastic(daily.high, daily.low, daily.close),
     },
     weekly: {
-      rsi: weeklyRSI,
-      macd: weeklyMACD,
-      pattern: weeklyPattern,
-      sma20: weeklySMA20,
+      rsi: calculateRSI(weekly.close),
+      macd: calculateMACD(weekly.close),
+      pattern: detectPattern(weekly.close),
+      sma20: calculateSMA(weekly.close, 20),
+      adx: calculateADX(weekly.high, weekly.low, weekly.close),
     },
     monthly: {
-      rsi: monthlyRSI,
-      pattern: monthlyPattern,
+      rsi: calculateRSI(monthly.close),
+      pattern: detectPattern(monthly.close),
+      adx: calculateADX(monthly.high, monthly.low, monthly.close),
     },
   };
 }
