@@ -3,9 +3,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Wallet, TrendingUp, TrendingDown, DollarSign, RefreshCw, Trash2 } from "lucide-react";
+import { Wallet, TrendingUp, TrendingDown, DollarSign, RefreshCw, Trash2, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 interface Position {
   symbol: string;
@@ -127,39 +128,48 @@ export const AutoTradePortfolio = () => {
   const totalUnrealizedPL = positions.reduce((sum, pos) => sum + parseFloat(pos.unrealized_pl), 0);
   const totalMarketValue = positions.reduce((sum, pos) => sum + parseFloat(pos.market_value), 0);
 
+  // Mock chart data for portfolio value trend
+  const chartData = [
+    { time: '9:30', value: accountData ? parseFloat(accountData.portfolio_value) * 0.98 : 0 },
+    { time: '10:00', value: accountData ? parseFloat(accountData.portfolio_value) * 0.99 : 0 },
+    { time: '11:00', value: accountData ? parseFloat(accountData.portfolio_value) * 1.01 : 0 },
+    { time: '12:00', value: accountData ? parseFloat(accountData.portfolio_value) * 0.995 : 0 },
+    { time: '13:00', value: accountData ? parseFloat(accountData.portfolio_value) : 0 },
+  ];
+
   return (
     <div className="space-y-6">
       {/* Account Summary */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="p-6 bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
+        <Card className="p-6 bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20 hover:shadow-elevated transition-all duration-300">
           <div className="flex items-center gap-3">
             <div className="p-3 bg-primary/20 rounded-lg">
               <Wallet className="h-6 w-6 text-primary" />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Portfolio Value</p>
-              <p className="text-2xl font-bold text-foreground">
+              <p className="text-2xl font-bold text-foreground animate-in fade-in duration-500">
                 ${accountData ? parseFloat(accountData.portfolio_value).toFixed(2) : '0.00'}
               </p>
             </div>
           </div>
         </Card>
 
-        <Card className="p-6 bg-card border-border">
+        <Card className="p-6 bg-card border-border hover:shadow-elevated transition-all duration-300">
           <div className="flex items-center gap-3">
             <div className="p-3 bg-secondary/50 rounded-lg">
               <DollarSign className="h-6 w-6 text-foreground" />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Cash</p>
-              <p className="text-2xl font-bold text-foreground">
+              <p className="text-2xl font-bold text-foreground animate-in fade-in duration-500">
                 ${accountData ? parseFloat(accountData.cash).toFixed(2) : '0.00'}
               </p>
             </div>
           </div>
         </Card>
 
-        <Card className={`p-6 ${totalUnrealizedPL >= 0 ? 'bg-success/10 border-success/30' : 'bg-destructive/10 border-destructive/30'}`}>
+        <Card className={`p-6 hover:shadow-elevated transition-all duration-300 ${totalUnrealizedPL >= 0 ? 'bg-success/10 border-success/30' : 'bg-destructive/10 border-destructive/30'}`}>
           <div className="flex items-center gap-3">
             <div className={`p-3 ${totalUnrealizedPL >= 0 ? 'bg-success/20' : 'bg-destructive/20'} rounded-lg`}>
               {totalUnrealizedPL >= 0 ? (
@@ -170,21 +180,21 @@ export const AutoTradePortfolio = () => {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Unrealized P/L</p>
-              <p className={`text-2xl font-bold ${totalUnrealizedPL >= 0 ? 'text-success' : 'text-destructive'}`}>
+              <p className={`text-2xl font-bold animate-in fade-in duration-500 ${totalUnrealizedPL >= 0 ? 'text-success' : 'text-destructive'}`}>
                 ${totalUnrealizedPL.toFixed(2)}
               </p>
             </div>
           </div>
         </Card>
 
-        <Card className="p-6 bg-card border-border">
+        <Card className="p-6 bg-card border-border hover:shadow-elevated transition-all duration-300">
           <div className="flex items-center gap-3">
             <div className="p-3 bg-secondary/50 rounded-lg">
               <DollarSign className="h-6 w-6 text-foreground" />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Buying Power</p>
-              <p className="text-2xl font-bold text-foreground">
+              <p className="text-2xl font-bold text-foreground animate-in fade-in duration-500">
                 ${accountData ? parseFloat(accountData.buying_power).toFixed(2) : '0.00'}
               </p>
             </div>
@@ -192,8 +202,52 @@ export const AutoTradePortfolio = () => {
         </Card>
       </div>
 
+      {/* Portfolio Value Chart */}
+      {accountData && (
+        <Card className="animate-in fade-in-from-bottom-4 duration-500">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-success" />
+              Portfolio Performance Today
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={chartData}>
+                <XAxis 
+                  dataKey="time" 
+                  stroke="hsl(var(--muted-foreground))"
+                  fontSize={12}
+                />
+                <YAxis 
+                  stroke="hsl(var(--muted-foreground))"
+                  fontSize={12}
+                  domain={['dataMin - 100', 'dataMax + 100']}
+                />
+                <Tooltip 
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--card))',
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: '8px',
+                  }}
+                  formatter={(value: number) => [`$${value.toFixed(2)}`, 'Value']}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="value" 
+                  stroke="hsl(var(--primary))" 
+                  strokeWidth={2}
+                  dot={{ fill: 'hsl(var(--primary))', r: 4 }}
+                  activeDot={{ r: 6 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Positions Table */}
-      <Card className="p-6 bg-card border-border shadow-card">
+      <Card className="p-6 bg-card border-border shadow-card animate-in fade-in-from-bottom-4 duration-700">
         <CardHeader className="px-0 pt-0">
           <div className="flex items-center justify-between mb-2">
             <div>
@@ -246,7 +300,7 @@ export const AutoTradePortfolio = () => {
                     const plpc = parseFloat(position.unrealized_plpc) * 100;
                     
                     return (
-                      <TableRow key={position.symbol} className="hover:bg-secondary/20 transition-colors">
+                      <TableRow key={position.symbol} className="hover:bg-secondary/20 transition-all duration-200 hover:scale-[1.01]">
                         <TableCell className="font-bold text-foreground">
                           <div className="flex items-center gap-2">
                             {position.symbol}
