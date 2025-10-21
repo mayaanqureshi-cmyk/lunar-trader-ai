@@ -14,17 +14,32 @@ interface AlpacaAutoTradingProps {
 }
 
 export const AlpacaAutoTrading = ({ onAutoTradingChange, onMaxPositionSizeChange }: AlpacaAutoTradingProps) => {
-  const [isEnabled, setIsEnabled] = useState(false);
-  const [maxPositionSize, setMaxPositionSize] = useState(100);
-  const [minConfidence, setMinConfidence] = useState(0.7);
+  const [isEnabled, setIsEnabled] = useState(() => {
+    const saved = localStorage.getItem('autoTradingEnabled');
+    return saved ? JSON.parse(saved) : false;
+  });
+  const [maxPositionSize, setMaxPositionSize] = useState(() => {
+    const saved = localStorage.getItem('maxPositionSize');
+    return saved ? Number(saved) : 100;
+  });
+  const [minConfidence, setMinConfidence] = useState(() => {
+    const saved = localStorage.getItem('minConfidence');
+    return saved ? Number(saved) : 0.7;
+  });
 
   useEffect(() => {
+    localStorage.setItem('autoTradingEnabled', JSON.stringify(isEnabled));
     onAutoTradingChange(isEnabled);
   }, [isEnabled, onAutoTradingChange]);
 
   useEffect(() => {
+    localStorage.setItem('maxPositionSize', String(maxPositionSize));
     onMaxPositionSizeChange(maxPositionSize);
   }, [maxPositionSize, onMaxPositionSizeChange]);
+
+  useEffect(() => {
+    localStorage.setItem('minConfidence', String(minConfidence));
+  }, [minConfidence]);
 
   const handleToggle = (checked: boolean) => {
     setIsEnabled(checked);
