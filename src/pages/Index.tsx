@@ -1,5 +1,5 @@
 import { Header } from "@/components/Header";
-import { TopGainers } from "@/components/TopGainers";
+import { HedgeFundRecommendations } from "@/components/HedgeFundRecommendations";
 import { PaperTrading } from "@/components/PaperTrading";
 import { Backtesting } from "@/components/Backtesting";
 import { TradingNotifications } from "@/components/TradingNotifications";
@@ -179,7 +179,7 @@ const Index = () => {
             </TabsTrigger>
             <TabsTrigger value="recommendations" className="data-[state=active]:bg-primary/10">
               <TrendingUp className="h-4 w-4 mr-2" />
-              Daily Picks
+              Recommendations
             </TabsTrigger>
             <TabsTrigger value="paper" className="data-[state=active]:bg-primary/10">
               <LineChart className="h-4 w-4 mr-2" />
@@ -214,7 +214,7 @@ const Index = () => {
           </TabsContent>
           
           <TabsContent value="recommendations" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <TopGainers />
+            <HedgeFundRecommendations />
           </TabsContent>
           
           <TabsContent value="paper" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
