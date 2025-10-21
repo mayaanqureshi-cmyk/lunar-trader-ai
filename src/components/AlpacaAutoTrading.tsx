@@ -1,263 +1,156 @@
 import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Zap, TrendingUp, DollarSign, ShieldCheck, Clock, CheckCircle, XCircle } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
-
-interface TradeOrder {
-  id: string;
-  symbol: string;
-  side: string;
-  quantity: number;
-  status: string;
-  filled_at: string | null;
-  filled_avg_price: string | null;
-}
+import { Input } from "@/components/ui/input";
+import { Zap, AlertTriangle, Settings } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "@/hooks/use-toast";
 
 interface AlpacaAutoTradingProps {
-  onAutoTradingChange?: (enabled: boolean) => void;
-  onMaxPositionSizeChange?: (size: number) => void;
+  onAutoTradingChange: (enabled: boolean) => void;
+  onMaxPositionSizeChange: (size: number) => void;
 }
 
 export const AlpacaAutoTrading = ({ onAutoTradingChange, onMaxPositionSizeChange }: AlpacaAutoTradingProps) => {
   const [isEnabled, setIsEnabled] = useState(false);
-  const [maxPositionSize, setMaxPositionSize] = useState("100");
-  const [orders, setOrders] = useState<TradeOrder[]>([]);
-  const [isExecuting, setIsExecuting] = useState(false);
-  const { toast } = useToast();
+  const [maxPositionSize, setMaxPositionSize] = useState(100);
+  const [minConfidence, setMinConfidence] = useState(0.7);
 
-  const handleToggleAutoTrading = () => {
-    const newState = !isEnabled;
-    setIsEnabled(newState);
-    onAutoTradingChange?.(newState);
+  useEffect(() => {
+    onAutoTradingChange(isEnabled);
+  }, [isEnabled, onAutoTradingChange]);
+
+  useEffect(() => {
+    onMaxPositionSizeChange(maxPositionSize);
+  }, [maxPositionSize, onMaxPositionSizeChange]);
+
+  const handleToggle = (checked: boolean) => {
+    setIsEnabled(checked);
     toast({
-      title: newState ? "Auto-Trading Enabled" : "Auto-Trading Disabled",
-      description: newState 
-        ? "The system will now execute AI-recommended trades automatically" 
-        : "The system will no longer execute trades automatically",
+      title: checked ? "Auto-Trading Enabled" : "Auto-Trading Disabled",
+      description: checked 
+        ? "AI will now automatically execute trades based on signals" 
+        : "AI signals will be shown but not executed",
     });
   };
 
-  const handleMaxPositionSizeChange = (value: string) => {
-    setMaxPositionSize(value);
-    const numValue = parseInt(value) || 100;
-    onMaxPositionSizeChange?.(numValue);
-  };
-
-  const executeTestTrade = async () => {
-    setIsExecuting(true);
-    try {
-      toast({
-        title: "Executing Trade",
-        description: "Placing order on Alpaca...",
-      });
-
-      const { data, error } = await supabase.functions.invoke('execute-alpaca-trade', {
-        body: {
-          symbol: 'AAPL',
-          action: 'buy',
-          quantity: 1,
-          orderType: 'market'
-        }
-      });
-
-      if (error) throw error;
-
-      if (data.success) {
-        setOrders([data.order, ...orders]);
-        toast({
-          title: "Trade Executed Successfully",
-          description: `${data.order.side.toUpperCase()} ${data.order.quantity} ${data.order.symbol} - Status: ${data.order.status}`,
-        });
-      } else {
-        throw new Error(data.error);
-      }
-    } catch (error) {
-      console.error("Error executing trade:", error);
-      toast({
-        title: "Trade Failed",
-        description: error instanceof Error ? error.message : "Failed to execute trade",
-        variant: "destructive",
-      });
-    } finally {
-      setIsExecuting(false);
-    }
-  };
-
   return (
-    <div className="space-y-6">
-      {/* Status Card */}
-      <Card className="p-6 bg-gradient-to-br from-card to-card/50 border-border">
-        <div className="flex items-center justify-between mb-6">
+    <Card className="p-6 bg-card border-border shadow-card">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="p-3 bg-primary/10 rounded-lg">
+          <Zap className="h-6 w-6 text-primary" />
+        </div>
+        <div className="flex-1">
+          <h2 className="text-2xl font-bold text-foreground">Auto-Trading</h2>
+          <p className="text-sm text-muted-foreground">
+            Automated trade execution powered by AI analysis
+          </p>
+        </div>
+        <Badge variant={isEnabled ? "default" : "secondary"}>
+          {isEnabled ? "Active" : "Inactive"}
+        </Badge>
+      </div>
+
+      <div className="space-y-6">
+        {/* Enable/Disable Toggle */}
+        <div className="flex items-center justify-between p-4 bg-secondary/5 rounded-lg border border-border">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-primary/10 rounded-xl">
-              <Zap className="h-6 w-6 text-primary" />
-            </div>
+            <Settings className="h-5 w-5 text-muted-foreground" />
             <div>
-              <h2 className="text-xl font-bold text-foreground">Alpaca Auto-Trading</h2>
-              <p className="text-sm text-muted-foreground">Automated trade execution with AI signals</p>
+              <Label htmlFor="auto-trading" className="text-base font-semibold">
+                Enable Auto-Trading
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                Allow AI to execute trades automatically
+              </p>
             </div>
           </div>
-          <Badge 
-            variant="outline" 
-            className={isEnabled ? "bg-success/10 text-success border-success/20" : "bg-muted text-muted-foreground"}
-          >
-            {isEnabled ? "Active" : "Inactive"}
-          </Badge>
+          <Switch
+            id="auto-trading"
+            checked={isEnabled}
+            onCheckedChange={handleToggle}
+          />
         </div>
 
-        {/* Connection Status */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <Card className="p-4 bg-success/5 border-success/20">
-            <div className="flex items-center gap-2 mb-2">
-              <CheckCircle className="h-4 w-4 text-success" />
-              <p className="text-sm font-semibold text-foreground">Alpaca Connected</p>
-            </div>
-            <p className="text-xs text-muted-foreground">Paper trading account active</p>
-          </Card>
-          
-          <Card className="p-4 bg-secondary/50 border-border">
-            <div className="flex items-center gap-2 mb-2">
-              <DollarSign className="h-4 w-4 text-primary" />
-              <p className="text-sm font-semibold text-foreground">Buying Power</p>
-            </div>
-            <p className="text-xs text-muted-foreground">Check account for balance</p>
-          </Card>
-
-          <Card className="p-4 bg-secondary/50 border-border">
-            <div className="flex items-center gap-2 mb-2">
-              <TrendingUp className="h-4 w-4 text-primary" />
-              <p className="text-sm font-semibold text-foreground">Orders Today</p>
-            </div>
-            <p className="text-xs text-muted-foreground">{orders.length} executed</p>
-          </Card>
-        </div>
-
-        {/* Controls */}
-        <div className="space-y-4 p-4 rounded-lg bg-secondary/30 border border-border">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="h-5 w-5 text-primary" />
-              <div>
-                <Label className="text-sm font-semibold text-foreground">Enable Auto-Trading</Label>
-                <p className="text-xs text-muted-foreground">Execute trades automatically based on AI signals</p>
-              </div>
-            </div>
-            <Switch 
-              checked={isEnabled} 
-              onCheckedChange={handleToggleAutoTrading}
+        {/* Configuration Settings */}
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="max-position" className="text-sm font-semibold">
+              Max Position Size ($)
+            </Label>
+            <Input
+              id="max-position"
+              type="number"
+              min="10"
+              max="10000"
+              value={maxPositionSize}
+              onChange={(e) => setMaxPositionSize(Number(e.target.value))}
+              disabled={!isEnabled}
+              className="bg-background"
             />
+            <p className="text-xs text-muted-foreground">
+              Maximum dollar amount per trade
+            </p>
           </div>
 
           <div className="space-y-2">
-            <Label className="text-sm font-semibold text-foreground">Max Position Size (shares)</Label>
-            <Input 
-              type="number"
-              value={maxPositionSize}
-              onChange={(e) => handleMaxPositionSizeChange(e.target.value)}
-              placeholder="100"
-              className="bg-background"
-            />
-            <p className="text-xs text-muted-foreground">Maximum number of shares per trade</p>
-          </div>
-
-          <Button 
-            onClick={executeTestTrade}
-            disabled={isExecuting}
-            className="w-full bg-primary hover:bg-primary/90"
-          >
-            {isExecuting ? (
-              <>
-                <Clock className="mr-2 h-4 w-4 animate-spin" />
-                Executing Trade...
-              </>
-            ) : (
-              <>
-                <Zap className="mr-2 h-4 w-4" />
-                Execute Test Trade (AAPL)
-              </>
-            )}
-          </Button>
-        </div>
-      </Card>
-
-      {/* Trade History */}
-      <Card className="p-6 bg-gradient-to-br from-card to-card/50 border-border">
-        <h3 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
-          <Clock className="h-5 w-5 text-primary" />
-          Recent Orders
-        </h3>
-        
-        {orders.length > 0 ? (
-          <ScrollArea className="h-[400px]">
-            <div className="space-y-3">
-              {orders.map((order) => (
-                <Card key={order.id} className="p-4 bg-secondary/30 border-border">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg font-bold text-foreground">{order.symbol}</span>
-                      <Badge variant={order.side === 'buy' ? 'default' : 'secondary'}>
-                        {order.side.toUpperCase()}
-                      </Badge>
-                    </div>
-                    <Badge 
-                      variant="outline"
-                      className={order.status === 'filled' 
-                        ? 'bg-success/10 text-success border-success/20' 
-                        : 'bg-warning/10 text-warning border-warning/20'
-                      }
-                    >
-                      {order.status}
-                    </Badge>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Quantity</p>
-                      <p className="text-foreground font-semibold">{order.quantity} shares</p>
-                    </div>
-                    {order.filled_avg_price && (
-                      <div>
-                        <p className="text-xs text-muted-foreground">Avg Price</p>
-                        <p className="text-foreground font-semibold">${order.filled_avg_price}</p>
-                      </div>
-                    )}
-                  </div>
-                  {order.filled_at && (
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Filled at: {new Date(order.filled_at).toLocaleString()}
-                    </p>
-                  )}
-                </Card>
-              ))}
+            <Label htmlFor="min-confidence" className="text-sm font-semibold">
+              Minimum Confidence Score
+            </Label>
+            <div className="flex items-center gap-4">
+              <Input
+                id="min-confidence"
+                type="range"
+                min="0.5"
+                max="0.95"
+                step="0.05"
+                value={minConfidence}
+                onChange={(e) => setMinConfidence(Number(e.target.value))}
+                disabled={!isEnabled}
+                className="flex-1"
+              />
+              <Badge variant="outline" className="min-w-[60px]">
+                {(minConfidence * 100).toFixed(0)}%
+              </Badge>
             </div>
-          </ScrollArea>
-        ) : (
-          <div className="text-center py-12">
-            <Clock className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
-            <p className="text-sm text-muted-foreground">No orders executed yet</p>
-          </div>
-        )}
-      </Card>
-
-      {/* Risk Disclaimer */}
-      <Card className="p-4 bg-warning/10 border-warning/20">
-        <div className="flex items-start gap-2">
-          <XCircle className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-semibold text-foreground mb-1">Important Notice</p>
             <p className="text-xs text-muted-foreground">
-              This is connected to Alpaca's paper trading account for testing. No real money is being used. 
-              Before going live with real money, thoroughly test your strategies and understand the risks involved.
+              Only execute trades with AI confidence above this threshold
             </p>
           </div>
         </div>
-      </Card>
-    </div>
+
+        {/* Warning */}
+        {isEnabled && (
+          <div className="flex items-start gap-3 p-4 bg-warning/10 border border-warning/30 rounded-lg">
+            <AlertTriangle className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-semibold text-foreground">Auto-Trading Active</p>
+              <p className="text-muted-foreground mt-1">
+                The system will automatically execute trades on your Alpaca account based on AI recommendations. 
+                Monitor your positions regularly and ensure sufficient buying power.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-4 pt-4 border-t border-border">
+          <div className="text-center">
+            <p className="text-2xl font-bold text-primary">0</p>
+            <p className="text-xs text-muted-foreground">Trades Today</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-success">0%</p>
+            <p className="text-xs text-muted-foreground">Win Rate</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-foreground">$0</p>
+            <p className="text-xs text-muted-foreground">Total P/L</p>
+          </div>
+        </div>
+      </div>
+    </Card>
   );
 };
