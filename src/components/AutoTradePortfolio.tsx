@@ -97,6 +97,31 @@ export const AutoTradePortfolio = () => {
 
   useEffect(() => {
     fetchPortfolio();
+
+    // Subscribe to real-time position updates
+    const channel = supabase
+      .channel('portfolio_updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'auto_trade_logs'
+        },
+        () => {
+          // Refresh portfolio when new trades are executed
+          fetchPortfolio();
+        }
+      )
+      .subscribe();
+
+    // Refresh every 30 seconds for live price updates
+    const interval = setInterval(fetchPortfolio, 30000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(interval);
+    };
   }, []);
 
   const totalUnrealizedPL = positions.reduce((sum, pos) => sum + parseFloat(pos.unrealized_pl), 0);

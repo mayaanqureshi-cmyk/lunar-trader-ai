@@ -3,16 +3,20 @@ import { TechnicalAnalysis } from "@/components/TechnicalAnalysis";
 import { AlpacaAutoTrading } from "@/components/AlpacaAutoTrading";
 import { ActivityLog } from "@/components/ActivityLog";
 import { AutoTradePortfolio } from "@/components/AutoTradePortfolio";
+import { MonitoringStats } from "@/components/MonitoringStats";
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Bot, Zap, Activity, Wallet } from "lucide-react";
+import { useTradeNotifications } from "@/hooks/useTradeNotifications";
 
 
 const Index = () => {
   const [isAutoTradingEnabled, setIsAutoTradingEnabled] = useState(false);
   const [maxPositionSize, setMaxPositionSize] = useState(100);
 
+  // Enable real-time trade notifications
+  useTradeNotifications();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-secondary/5 to-background">
@@ -41,7 +45,10 @@ const Index = () => {
       </div>
 
       <div className="container mx-auto px-6 py-8 space-y-8">
-        {/* Focused layout: Auto-Trade + Technical Analysis only */}
+        {/* Monitoring Stats */}
+        <div className="animate-in fade-in-from-bottom-4 duration-300">
+          <MonitoringStats />
+        </div>
 
         {/* Main Features */}
         <Tabs defaultValue="portfolio" className="w-full">
@@ -64,22 +71,22 @@ const Index = () => {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="portfolio" className="animate-in fade-in-from-bottom-4 duration-500">
+          <TabsContent value="portfolio" className="animate-in fade-in duration-500">
             <AutoTradePortfolio />
           </TabsContent>
 
-          <TabsContent value="activity" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <TabsContent value="activity" className="animate-in fade-in duration-500">
             <ActivityLog />
           </TabsContent>
 
-          <TabsContent value="auto-trade" className="animate-in fade-in-from-bottom-4 duration-500">
+          <TabsContent value="auto-trade" className="animate-in fade-in duration-500">
             <AlpacaAutoTrading 
               onAutoTradingChange={setIsAutoTradingEnabled}
               onMaxPositionSizeChange={setMaxPositionSize}
             />
           </TabsContent>
 
-          <TabsContent value="technical" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <TabsContent value="technical" className="animate-in fade-in duration-500">
             <TechnicalAnalysis />
           </TabsContent>
         </Tabs>
