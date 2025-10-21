@@ -1,11 +1,11 @@
 import { Header } from "@/components/Header";
-import { AIStockAnalyzer } from "@/components/AIStockAnalyzer";
 import { TechnicalAnalysis } from "@/components/TechnicalAnalysis";
 import { AlpacaAutoTrading } from "@/components/AlpacaAutoTrading";
+import { ActivityLog } from "@/components/ActivityLog";
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Bot, Zap, Activity, Brain } from "lucide-react";
+import { Bot, Zap, Activity } from "lucide-react";
 
 
 const Index = () => {
@@ -44,7 +44,7 @@ const Index = () => {
 
         {/* Main Features */}
         <Tabs defaultValue="auto-trade" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-6 bg-card/50 backdrop-blur">
+          <TabsList className="grid w-full grid-cols-3 mb-6 bg-card/50 backdrop-blur">
             <TabsTrigger value="auto-trade" className="data-[state=active]:bg-primary/10">
               <Zap className="h-4 w-4 mr-2" />
               Auto-Trade
@@ -52,6 +52,10 @@ const Index = () => {
             <TabsTrigger value="technical" className="data-[state=active]:bg-primary/10">
               <Activity className="h-4 w-4 mr-2" />
               Technical
+            </TabsTrigger>
+            <TabsTrigger value="activity" className="data-[state=active]:bg-primary/10">
+              <Activity className="h-4 w-4 mr-2" />
+              Activity Log
             </TabsTrigger>
           </TabsList>
 
@@ -64,6 +68,10 @@ const Index = () => {
 
           <TabsContent value="technical" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <TechnicalAnalysis />
+          </TabsContent>
+
+          <TabsContent value="activity" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <ActivityLog />
           </TabsContent>
         </Tabs>
       </div>
