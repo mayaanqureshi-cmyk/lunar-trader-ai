@@ -86,12 +86,25 @@ serve(async (req) => {
       'SPY', 'QQQ', 'IWM', 'DIA', 'VTI', 'VOO'
     ];
 
-    console.log(`📊 Analyzing ${symbolsToScan.length} stocks...`);
+    console.log(`📊 Analyzing ${symbolsToScan.length} stocks with comprehensive metrics...`);
 
-    // Analyze stocks using AI
-    const aiPrompt = `You are an elite algorithmic trader. Analyze these ${symbolsToScan.length} stocks and identify the TOP 1-2 stocks with the HIGHEST probability of making a >3% move TODAY.
+    // Step 1: Get comprehensive technical analysis for all stocks
+    const technicalAnalysis = await supabase.functions.invoke('analyze-multi-timeframe', {
+      body: { symbols: symbolsToScan }
+    });
 
-Stocks to analyze: ${symbolsToScan.join(', ')}
+    if (technicalAnalysis.error) {
+      throw new Error(`Technical analysis failed: ${technicalAnalysis.error.message}`);
+    }
+
+    const technicalData = technicalAnalysis.data;
+    console.log(`✅ Technical analysis complete for ${symbolsToScan.length} stocks`);
+
+    // Step 2: Analyze with multiple AI models for consensus
+    const aiPrompt = `You are an elite algorithmic trader. Analyze these stocks with their COMPREHENSIVE TECHNICAL DATA and identify the TOP 1-2 stocks with HIGHEST probability of making a >3% move TODAY.
+
+TECHNICAL DATA:
+${JSON.stringify(technicalData, null, 2)}
 
 Return ONLY a JSON array with 1-2 stocks in this exact format:
 [
@@ -99,36 +112,28 @@ Return ONLY a JSON array with 1-2 stocks in this exact format:
     "symbol": "NVDA",
     "recommendation": "BUY",
     "confidence": 0.85,
-    "reasoning": "Strong momentum, RSI oversold bounce, institutional buying",
+    "reasoning": "Strong momentum across all timeframes, RSI oversold bounce on daily, MACD bullish crossover, ADX shows strong trend, volume spike 140%",
     "priceTarget": 145.50,
     "stopLoss": 142.00,
-    "technicalIndicators": {
-      "rsi": "Oversold at 32, bouncing back",
-      "macd": "Bullish crossover confirmed",
-      "volume": "Above average by 140%",
-      "movingAverages": "Price above 50-day MA, approaching 200-day"
-    },
-    "fundamentals": {
-      "sentiment": "Bullish institutional buying",
-      "newsImpact": "Positive earnings catalyst expected",
-      "sectorStrength": "Tech sector showing relative strength"
-    },
-    "riskReward": "1:3 risk/reward ratio",
-    "timeframe": "1-3 day swing trade"
+    "technicalScore": 8.5,
+    "riskReward": "1:3"
   }
 ]
 
-Criteria for recommendation:
-- Confidence must be >75%
-- Clear technical setup with multiple confirmations
-- Strong volume and momentum
-- Risk/reward ratio >1:2
-- Provide detailed technical analysis for each indicator
-- Include fundamental sentiment and news impact
+CRITERIA (ALL must be met):
+- Confidence >80%
+- Technical score >7.5/10
+- Multiple timeframe alignment (daily/weekly/monthly)
+- Strong volume confirmation
+- Clear trend with ADX >25
+- RSI not overbought (under 70)
+- MACD bullish alignment
+- Risk/reward >1:2.5
 
-If no stocks meet criteria, return empty array: []`;
+If no stocks meet ALL criteria, return empty array: []`;
 
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    // Query Gemini 2.5 Flash
+    const geminiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${LOVABLE_API_KEY}`,
@@ -137,22 +142,69 @@ If no stocks meet criteria, return empty array: []`;
       body: JSON.stringify({
         model: 'google/gemini-2.5-flash',
         messages: [
-          { role: 'system', content: 'You are an elite quantitative trader. Return only valid JSON.' },
+          { role: 'system', content: 'You are an elite quantitative trader specializing in technical analysis. Return only valid JSON.' },
           { role: 'user', content: aiPrompt }
         ],
       }),
     });
 
-    if (!aiResponse.ok) {
-      throw new Error(`AI analysis failed: ${aiResponse.status}`);
+    // Query GPT-5 Mini
+    const gptResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'openai/gpt-5-mini',
+        messages: [
+          { role: 'system', content: 'You are an elite quantitative trader specializing in multi-timeframe analysis. Return only valid JSON.' },
+          { role: 'user', content: aiPrompt }
+        ],
+      }),
+    });
+
+    if (!geminiResponse.ok || !gptResponse.ok) {
+      throw new Error(`AI analysis failed: Gemini ${geminiResponse.status}, GPT ${gptResponse.status}`);
     }
 
-    const aiData = await aiResponse.json();
-    let analysis = aiData.choices[0].message.content.trim();
+    const geminiData = await geminiResponse.json();
+    const gptData = await gptResponse.json();
+
+    // Parse both AI responses
+    let geminiAnalysis = geminiData.choices[0].message.content.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    let gptAnalysis = gptData.choices[0].message.content.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     
-    // Clean JSON response
-    analysis = analysis.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    const recommendations = JSON.parse(analysis);
+    const geminiRecs = JSON.parse(geminiAnalysis);
+    const gptRecs = JSON.parse(gptAnalysis);
+
+    console.log(`🤖 Gemini recommended: ${geminiRecs.length} stocks`);
+    console.log(`🤖 GPT-5 Mini recommended: ${gptRecs.length} stocks`);
+
+    // Step 3: Find consensus recommendations (both AIs agree)
+    const recommendations = [];
+    for (const geminiRec of geminiRecs) {
+      const gptMatch = gptRecs.find((g: any) => g.symbol === geminiRec.symbol && g.recommendation === 'BUY');
+      if (gptMatch) {
+        // Both AIs agree - combine their insights
+        recommendations.push({
+          symbol: geminiRec.symbol,
+          recommendation: 'BUY',
+          confidence: (geminiRec.confidence + gptMatch.confidence) / 2, // Average confidence
+          reasoning: `CONSENSUS: ${geminiRec.reasoning} | GPT confirms: ${gptMatch.reasoning}`,
+          priceTarget: (geminiRec.priceTarget + gptMatch.priceTarget) / 2,
+          stopLoss: Math.max(geminiRec.stopLoss, gptMatch.stopLoss), // More conservative stop
+          technicalScore: (geminiRec.technicalScore + gptMatch.technicalScore) / 2,
+          riskReward: geminiRec.riskReward,
+          aiConsensus: 'STRONG - Both Gemini & GPT-5 agree',
+          technicalIndicators: technicalData.technicalData?.[geminiRec.symbol] || {},
+          fundamentals: { aiModels: 'Gemini 2.5 Flash + GPT-5 Mini', consensus: 'Strong' },
+          timeframe: '1-3 day swing trade'
+        });
+      }
+    }
+
+    console.log(`✅ AI Consensus: ${recommendations.length} stocks with strong agreement`);
 
     console.log(`✅ AI Recommendations: ${recommendations.length} stocks`);
 
