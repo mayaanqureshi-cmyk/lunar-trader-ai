@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.auto-trade-scanner]
 verify_jwt = false
+
+[functions.auto-trade-sell-monitor]
+verify_jwt = false
