@@ -58,8 +58,33 @@ serve(async (req) => {
       });
     }
 
-    // Top momentum stocks to scan
-    const symbolsToScan = ['NVDA', 'TSLA', 'AMD', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'NFLX', 'SPY'];
+    // Expanded universe of stocks across sectors
+    const symbolsToScan = [
+      // Mega Cap Tech
+      'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA', 'TSLA',
+      // Tech & Semiconductors
+      'AMD', 'INTC', 'QCOM', 'AVGO', 'CRM', 'ORCL', 'ADBE', 'NOW', 'PANW', 'CRWD',
+      // AI & Cloud
+      'PLTR', 'SNOW', 'DDOG', 'NET', 'ZS', 'MDB',
+      // Consumer & Retail
+      'AMZN', 'WMT', 'COST', 'TGT', 'HD', 'NKE', 'SBUX',
+      // Finance
+      'JPM', 'BAC', 'WFC', 'GS', 'MS', 'V', 'MA', 'PYPL', 'SQ',
+      // Healthcare & Biotech
+      'JNJ', 'UNH', 'PFE', 'ABBV', 'LLY', 'TMO', 'MRNA', 'GILD',
+      // Energy
+      'XOM', 'CVX', 'COP', 'SLB', 'EOG',
+      // Communication
+      'DIS', 'NFLX', 'CMCSA', 'T', 'VZ',
+      // Industrials
+      'BA', 'CAT', 'GE', 'UPS', 'HON', 'LMT',
+      // EV & Clean Energy
+      'RIVN', 'LCID', 'NIO', 'ENPH', 'PLUG',
+      // Crypto-Related
+      'COIN', 'MSTR', 'RIOT', 'MARA',
+      // ETFs
+      'SPY', 'QQQ', 'IWM', 'DIA', 'VTI', 'VOO'
+    ];
 
     console.log(`📊 Analyzing ${symbolsToScan.length} stocks...`);
 
