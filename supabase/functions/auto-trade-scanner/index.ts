@@ -120,17 +120,14 @@ Return ONLY a JSON array with 1-2 stocks in this exact format:
   }
 ]
 
-CRITERIA (ALL must be met):
-- Confidence >80%
-- Technical score >7.5/10
-- Multiple timeframe alignment (daily/weekly/monthly)
-- Strong volume confirmation
-- Clear trend with ADX >25
-- RSI not overbought (under 70)
-- MACD bullish alignment
-- Risk/reward >1:2.5
+CRITERIA:
+- Confidence >70% (lowered from 80%)
+- Technical score >6.5/10 (lowered from 7.5)
+- Strong volume or momentum signals
+- Clear trend direction
+- Positive risk/reward setup
 
-If no stocks meet ALL criteria, return empty array: []`;
+Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum criteria, return empty array: []`;
 
     // Query Gemini 2.5 Flash
     const geminiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -181,30 +178,81 @@ If no stocks meet ALL criteria, return empty array: []`;
     console.log(`🤖 Gemini recommended: ${geminiRecs.length} stocks`);
     console.log(`🤖 GPT-5 Mini recommended: ${gptRecs.length} stocks`);
 
-    // Step 3: Find consensus recommendations (both AIs agree)
-    const recommendations = [];
-    for (const geminiRec of geminiRecs) {
-      const gptMatch = gptRecs.find((g: any) => g.symbol === geminiRec.symbol && g.recommendation === 'BUY');
-      if (gptMatch) {
-        // Both AIs agree - combine their insights
-        recommendations.push({
-          symbol: geminiRec.symbol,
+    // Step 3: Combine recommendations from both AIs (not just consensus)
+    const recommendationMap = new Map();
+    
+    // Add all Gemini recommendations
+    for (const rec of geminiRecs) {
+      if (rec.confidence >= 0.70 && rec.recommendation === 'BUY') {
+        recommendationMap.set(rec.symbol, {
+          symbol: rec.symbol,
           recommendation: 'BUY',
-          confidence: (geminiRec.confidence + gptMatch.confidence) / 2, // Average confidence
-          reasoning: `CONSENSUS: ${geminiRec.reasoning} | GPT confirms: ${gptMatch.reasoning}`,
-          priceTarget: (geminiRec.priceTarget + gptMatch.priceTarget) / 2,
-          stopLoss: Math.max(geminiRec.stopLoss, gptMatch.stopLoss), // More conservative stop
-          technicalScore: (geminiRec.technicalScore + gptMatch.technicalScore) / 2,
-          riskReward: geminiRec.riskReward,
-          aiConsensus: 'STRONG - Both Gemini & GPT-5 agree',
-          technicalIndicators: technicalData.technicalData?.[geminiRec.symbol] || {},
-          fundamentals: { aiModels: 'Gemini 2.5 Flash + GPT-5 Mini', consensus: 'Strong' },
-          timeframe: '1-3 day swing trade'
+          geminiConfidence: rec.confidence,
+          gptConfidence: 0,
+          confidence: rec.confidence,
+          geminiReasoning: rec.reasoning,
+          gptReasoning: '',
+          priceTarget: rec.priceTarget,
+          stopLoss: rec.stopLoss,
+          technicalScore: rec.technicalScore || 0,
+          riskReward: rec.riskReward,
+          aiConsensus: 'Gemini Only'
         });
       }
     }
+    
+    // Add/merge GPT recommendations
+    for (const rec of gptRecs) {
+      if (rec.confidence >= 0.70 && rec.recommendation === 'BUY') {
+        const existing = recommendationMap.get(rec.symbol);
+        if (existing) {
+          // Both AIs recommend - upgrade to consensus
+          existing.gptConfidence = rec.confidence;
+          existing.confidence = (existing.geminiConfidence + rec.confidence) / 2;
+          existing.gptReasoning = rec.reasoning;
+          existing.priceTarget = (existing.priceTarget + rec.priceTarget) / 2;
+          existing.stopLoss = Math.max(existing.stopLoss, rec.stopLoss);
+          existing.technicalScore = (existing.technicalScore + (rec.technicalScore || 0)) / 2;
+          existing.aiConsensus = '🔥 STRONG CONSENSUS - Both AIs Agree';
+        } else {
+          // GPT only recommendation
+          recommendationMap.set(rec.symbol, {
+            symbol: rec.symbol,
+            recommendation: 'BUY',
+            geminiConfidence: 0,
+            gptConfidence: rec.confidence,
+            confidence: rec.confidence,
+            geminiReasoning: '',
+            gptReasoning: rec.reasoning,
+            priceTarget: rec.priceTarget,
+            stopLoss: rec.stopLoss,
+            technicalScore: rec.technicalScore || 0,
+            riskReward: rec.riskReward,
+            aiConsensus: 'GPT-5 Only'
+          });
+        }
+      }
+    }
+    
+    // Convert to array and sort by confidence
+    const recommendations = Array.from(recommendationMap.values())
+      .sort((a, b) => b.confidence - a.confidence)
+      .slice(0, 3) // Top 3 recommendations
+      .map(rec => ({
+        ...rec,
+        reasoning: rec.geminiReasoning && rec.gptReasoning 
+          ? `🤖 Gemini: ${rec.geminiReasoning} | 🤖 GPT-5: ${rec.gptReasoning}`
+          : rec.geminiReasoning || rec.gptReasoning,
+        technicalIndicators: technicalData.technicalData?.[rec.symbol] || {},
+        fundamentals: { 
+          aiModels: rec.aiConsensus,
+          geminiScore: rec.geminiConfidence, 
+          gptScore: rec.gptConfidence 
+        },
+        timeframe: '1-3 day swing trade'
+      }));
 
-    console.log(`✅ AI Consensus: ${recommendations.length} stocks with strong agreement`);
+    console.log(`✅ Combined AI Analysis: ${recommendations.length} stocks (${recommendations.filter(r => r.aiConsensus.includes('CONSENSUS')).length} with consensus)`);
 
     console.log(`✅ AI Recommendations: ${recommendations.length} stocks`);
 
