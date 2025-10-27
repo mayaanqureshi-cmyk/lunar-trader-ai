@@ -279,31 +279,46 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
     const buyingPower = parseFloat(accountData.buying_power);
     const portfolioValue = parseFloat(accountData.portfolio_value);
 
-    console.log(`💰 Buying Power: $${buyingPower.toFixed(2)}`);
+    console.log(`💰 Buying Power: $${buyingPower.toFixed(2)}, Portfolio: $${portfolioValue.toFixed(2)}`);
 
-    // Get auto-trading settings (use defaults if not set)
-    const maxPositionSize = 1000; // Default max per trade
-    const maxPortfolioRisk = 2; // Default 2%
+    // Dynamic position sizing for small accounts
     const stopLossPercent = 2;
     const takeProfitPercent = 6;
+    
+    // For small accounts (<$1000), use 80-90% of buying power per trade
+    // For larger accounts, use more conservative sizing
+    const accountSizeMultiplier = buyingPower < 1000 ? 0.85 : (buyingPower < 5000 ? 0.3 : 0.2);
+    const maxPositionSize = buyingPower * accountSizeMultiplier;
+    
+    // Limit to top 1-2 trades for small accounts
+    const maxTrades = buyingPower < 500 ? 1 : (buyingPower < 2000 ? 2 : 3);
+
+    console.log(`📊 Account Strategy: Max $${maxPositionSize.toFixed(2)} per position, up to ${maxTrades} trades`);
 
     const tradesExecuted = [];
+    let tradesPlaced = 0;
 
     for (const rec of recommendations) {
-      if (rec.confidence < 0.75 || rec.recommendation !== 'BUY') continue;
+      if (tradesPlaced >= maxTrades) {
+        console.log(`⚠️ Max trades reached (${maxTrades})`);
+        break;
+      }
+
+      if (rec.confidence < 0.70 || rec.recommendation !== 'BUY') continue;
 
       const currentPrice = rec.priceTarget || 100;
       
-      // Calculate position size with risk management
-      const maxRiskAmount = portfolioValue * (maxPortfolioRisk / 100);
-      const riskPerShare = currentPrice * (stopLossPercent / 100);
-      const quantity = Math.max(1, Math.min(
-        Math.floor(maxRiskAmount / riskPerShare),
-        Math.floor(maxPositionSize / currentPrice),
-        Math.floor(buyingPower / currentPrice)
-      ));
+      // Simple position sizing for small accounts
+      const positionValue = Math.min(maxPositionSize, buyingPower * 0.9);
+      const quantity = Math.floor(positionValue / currentPrice);
 
-      if (quantity < 1 || quantity * currentPrice > buyingPower) {
+      if (quantity < 1) {
+        console.log(`⚠️ Stock too expensive: ${rec.symbol} @ $${currentPrice.toFixed(2)} (need $${currentPrice.toFixed(2)}, have $${buyingPower.toFixed(2)})`);
+        continue;
+      }
+
+      const totalCost = quantity * currentPrice;
+      if (totalCost > buyingPower) {
         console.log(`⚠️ Insufficient funds for ${rec.symbol}`);
         continue;
       }
@@ -386,7 +401,8 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
             timestamp: new Date().toISOString(),
           });
 
-          console.log(`✅ Trade executed: ${rec.symbol}`);
+          tradesPlaced++;
+          console.log(`✅ Trade executed: ${rec.symbol} x${quantity} (~$${totalCost.toFixed(2)})`);
         } else {
           const errorText = await orderResponse.text();
           console.error(`❌ Order failed for ${rec.symbol}:`, errorText);
