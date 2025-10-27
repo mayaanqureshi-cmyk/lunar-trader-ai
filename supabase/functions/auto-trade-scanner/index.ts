@@ -41,7 +41,7 @@ serve(async (req) => {
     }
 
     // Check real market status via Alpaca clock
-    const clockResp = await fetch('https://paper-api.alpaca.markets/v2/clock', {
+    const clockResp = await fetch('https://api.alpaca.markets/v2/clock', {
       headers: {
         'APCA-API-KEY-ID': ALPACA_API_KEY,
         'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
@@ -264,7 +264,7 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
     }
 
     // Check Alpaca account
-    const accountResponse = await fetch('https://paper-api.alpaca.markets/v2/account', {
+    const accountResponse = await fetch('https://api.alpaca.markets/v2/account', {
       headers: {
         'APCA-API-KEY-ID': ALPACA_API_KEY,
         'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
@@ -315,7 +315,7 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
 
       try {
         // Place market order
-        const orderResponse = await fetch('https://paper-api.alpaca.markets/v2/orders', {
+        const orderResponse = await fetch('https://api.alpaca.markets/v2/orders', {
           method: 'POST',
           headers: {
             'APCA-API-KEY-ID': ALPACA_API_KEY,
@@ -335,7 +335,7 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
           const orderData = await orderResponse.json();
           
           // Place stop-loss
-          await fetch('https://paper-api.alpaca.markets/v2/orders', {
+          await fetch('https://api.alpaca.markets/v2/orders', {
             method: 'POST',
             headers: {
               'APCA-API-KEY-ID': ALPACA_API_KEY,
@@ -353,7 +353,7 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
           });
 
           // Place take-profit
-          await fetch('https://paper-api.alpaca.markets/v2/orders', {
+          await fetch('https://api.alpaca.markets/v2/orders', {
             method: 'POST',
             headers: {
               'APCA-API-KEY-ID': ALPACA_API_KEY,
