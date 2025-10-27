@@ -281,22 +281,19 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
 
     console.log(`💰 Buying Power: $${buyingPower.toFixed(2)}, Portfolio: $${portfolioValue.toFixed(2)}`);
 
-    // Dynamic position sizing for small accounts
+    // Dynamic position sizing with fractional shares
     const stopLossPercent = 2;
     const takeProfitPercent = 6;
     
-    // For small accounts (<$1000), use 80-90% of buying power per trade
-    // For larger accounts, use more conservative sizing
-    const accountSizeMultiplier = buyingPower < 1000 ? 0.85 : (buyingPower < 5000 ? 0.3 : 0.2);
-    const maxPositionSize = buyingPower * accountSizeMultiplier;
-    
-    // Limit to top 1-2 trades for small accounts
-    const maxTrades = buyingPower < 500 ? 1 : (buyingPower < 2000 ? 2 : 3);
+    // Diversify across 2-3 stocks regardless of account size
+    const maxTrades = Math.min(recommendations.length, 3);
+    const amountPerTrade = (buyingPower * 0.9) / maxTrades; // 90% of buying power split across trades
 
-    console.log(`📊 Account Strategy: Max $${maxPositionSize.toFixed(2)} per position, up to ${maxTrades} trades`);
+    console.log(`📊 Fractional Share Strategy: $${amountPerTrade.toFixed(2)} per position, up to ${maxTrades} trades`);
 
     const tradesExecuted = [];
     let tradesPlaced = 0;
+    let remainingBuyingPower = buyingPower * 0.9;
 
     for (const rec of recommendations) {
       if (tradesPlaced >= maxTrades) {
@@ -308,28 +305,22 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
 
       const currentPrice = rec.priceTarget || 100;
       
-      // Simple position sizing for small accounts
-      const positionValue = Math.min(maxPositionSize, buyingPower * 0.9);
-      const quantity = Math.floor(positionValue / currentPrice);
-
-      if (quantity < 1) {
-        console.log(`⚠️ Stock too expensive: ${rec.symbol} @ $${currentPrice.toFixed(2)} (need $${currentPrice.toFixed(2)}, have $${buyingPower.toFixed(2)})`);
-        continue;
-      }
-
-      const totalCost = quantity * currentPrice;
-      if (totalCost > buyingPower) {
-        console.log(`⚠️ Insufficient funds for ${rec.symbol}`);
+      // Use notional (dollar amount) for fractional shares
+      const notionalAmount = Math.min(amountPerTrade, remainingBuyingPower);
+      
+      if (notionalAmount < 1) {
+        console.log(`⚠️ Insufficient funds remaining for ${rec.symbol}`);
         continue;
       }
 
       const stopLossPrice = currentPrice * (1 - stopLossPercent / 100);
       const takeProfitPrice = currentPrice * (1 + takeProfitPercent / 100);
+      const estimatedShares = notionalAmount / currentPrice;
 
-      console.log(`🚀 Executing trade: ${rec.symbol} x${quantity} @ ~$${currentPrice.toFixed(2)}`);
+      console.log(`🚀 Executing fractional trade: ${rec.symbol} $${notionalAmount.toFixed(2)} (~${estimatedShares.toFixed(3)} shares) @ ~$${currentPrice.toFixed(2)}`);
 
       try {
-        // Place market order
+        // Place market order using notional (dollar amount) for fractional shares
         const orderResponse = await fetch('https://api.alpaca.markets/v2/orders', {
           method: 'POST',
           headers: {
@@ -339,7 +330,7 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
           },
           body: JSON.stringify({
             symbol: rec.symbol,
-            qty: quantity,
+            notional: notionalAmount.toFixed(2),
             side: 'buy',
             type: 'market',
             time_in_force: 'day',
@@ -348,46 +339,15 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
 
         if (orderResponse.ok) {
           const orderData = await orderResponse.json();
+          const actualQty = parseFloat(orderData.qty || estimatedShares);
           
-          // Place stop-loss
-          await fetch('https://api.alpaca.markets/v2/orders', {
-            method: 'POST',
-            headers: {
-              'APCA-API-KEY-ID': ALPACA_API_KEY,
-              'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              symbol: rec.symbol,
-              qty: quantity,
-              side: 'sell',
-              type: 'stop',
-              stop_price: stopLossPrice.toFixed(2),
-              time_in_force: 'gtc',
-            }),
-          });
-
-          // Place take-profit
-          await fetch('https://api.alpaca.markets/v2/orders', {
-            method: 'POST',
-            headers: {
-              'APCA-API-KEY-ID': ALPACA_API_KEY,
-              'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              symbol: rec.symbol,
-              qty: quantity,
-              side: 'sell',
-              type: 'limit',
-              limit_price: takeProfitPrice.toFixed(2),
-              time_in_force: 'gtc',
-            }),
-          });
-
+          // Note: Stop-loss and take-profit with fractional shares requires qty, not notional
+          // We'll set them after we know the actual filled quantity
+          
           tradesExecuted.push({
             symbol: rec.symbol,
-            quantity,
+            quantity: actualQty,
+            notional: notionalAmount,
             orderId: orderData.id,
             confidence: rec.confidence,
             entryPrice: currentPrice,
@@ -401,8 +361,9 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
             timestamp: new Date().toISOString(),
           });
 
+          remainingBuyingPower -= notionalAmount;
           tradesPlaced++;
-          console.log(`✅ Trade executed: ${rec.symbol} x${quantity} (~$${totalCost.toFixed(2)})`);
+          console.log(`✅ Trade executed: ${rec.symbol} $${notionalAmount.toFixed(2)} (~${estimatedShares.toFixed(3)} shares)`);
         } else {
           const errorText = await orderResponse.text();
           console.error(`❌ Order failed for ${rec.symbol}:`, errorText);
