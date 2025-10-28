@@ -296,51 +296,67 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
     const currentPositions = await positionsResponse.json();
     console.log(`📊 Current positions: ${currentPositions.length}`);
 
-    // Score current positions with AI for comparison
-    const positionScores = new Map();
+    // Check for profit-taking opportunities (>10% profit with >4% dip from peak)
+    const sellsExecuted = [];
+    let remainingBuyingPower = buyingPower * 0.9;
     
     if (currentPositions.length > 0) {
-      console.log('🔍 Analyzing current positions...');
+      console.log('💰 Checking positions for profit-taking...');
       
       for (const pos of currentPositions) {
-        try {
-          const techAnalysis = await supabase.functions.invoke('analyze-multi-timeframe', {
-            body: { symbols: [pos.symbol] }
-          });
+        const profitPercent = parseFloat(pos.unrealized_plpc) * 100;
+        const avgEntry = parseFloat(pos.avg_entry_price);
+        const currentPrice = parseFloat(pos.current_price);
+        
+        // Calculate peak price (assuming entry + max profit)
+        const peakPrice = Math.max(currentPrice, avgEntry * 1.1); // At least 10% above entry
+        const dipFromPeak = ((peakPrice - currentPrice) / peakPrice) * 100;
+        
+        console.log(`📊 ${pos.symbol}: Profit ${profitPercent.toFixed(2)}%, Dip from peak ${dipFromPeak.toFixed(2)}%`);
+        
+        // Sell if profit > 10% AND dipping more than 4% from peak
+        if (profitPercent > 10 && dipFromPeak > 4) {
+          console.log(`💰 Profit-taking on ${pos.symbol}: ${profitPercent.toFixed(2)}% profit, ${dipFromPeak.toFixed(2)}% dip`);
           
-          const aiScorePrompt = `Rate this current stock position's strength (0-100):
-Symbol: ${pos.symbol}
-Current P/L: ${pos.unrealized_plpc}%
-Market Value: $${pos.market_value}
-Technical Data: ${JSON.stringify(techAnalysis.data?.technicalData?.[pos.symbol] || {})}
-
-Score based on: momentum, technical indicators, likelihood to continue performing well.
-Respond with ONLY a number 0-100.`;
-          
-          const scoreResp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: 'google/gemini-2.5-flash',
-              messages: [{ role: 'user', content: aiScorePrompt }],
-            }),
-          });
-          
-          const scoreData = await scoreResp.json();
-          const score = parseInt(scoreData.choices[0].message.content.trim());
-          
-          positionScores.set(pos.symbol, {
-            score: isNaN(score) ? 50 : score,
-            marketValue: parseFloat(pos.market_value),
-            qty: pos.qty
-          });
-          
-          console.log(`📊 ${pos.symbol} current score: ${score}`);
-        } catch (e) {
-          console.error(`Error scoring ${pos.symbol}:`, e);
+          try {
+            const sellResp = await fetch('https://api.alpaca.markets/v2/orders', {
+              method: 'POST',
+              headers: {
+                'APCA-API-KEY-ID': ALPACA_API_KEY,
+                'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                symbol: pos.symbol,
+                qty: pos.qty,
+                side: 'sell',
+                type: 'market',
+                time_in_force: 'day',
+              }),
+            });
+            
+            if (sellResp.ok) {
+              const sellOrder = await sellResp.json();
+              const profitAmount = parseFloat(pos.unrealized_pl);
+              
+              sellsExecuted.push({
+                symbol: pos.symbol,
+                orderId: sellOrder.id,
+                reason: `Profit-taking: ${profitPercent.toFixed(2)}% gain with ${dipFromPeak.toFixed(2)}% dip from peak`,
+                profitAmount: profitAmount,
+                profitPercent: profitPercent,
+                freedCapital: parseFloat(pos.market_value)
+              });
+              
+              remainingBuyingPower += parseFloat(pos.market_value);
+              console.log(`✅ Sold ${pos.symbol} for ${profitPercent.toFixed(2)}% profit ($${profitAmount.toFixed(2)})`);
+            } else {
+              const errorText = await sellResp.text();
+              console.error(`❌ Failed to sell ${pos.symbol}:`, errorText);
+            }
+          } catch (sellError) {
+            console.error(`❌ Sell error for ${pos.symbol}:`, sellError);
+          }
         }
       }
     }
@@ -356,17 +372,9 @@ Respond with ONLY a number 0-100.`;
     console.log(`📊 Fractional Share Strategy: $${amountPerTrade.toFixed(2)} per position, up to ${maxTrades} trades`);
 
     const tradesExecuted = [];
-    const sellsExecuted = [];
     let tradesPlaced = 0;
-    let remainingBuyingPower = buyingPower * 0.9;
 
-    // Add AI scores to recommendations for comparison
-    const recsWithScores = recommendations.map(r => ({
-      ...r,
-      aiScore: Math.round(r.confidence * 100)
-    }));
-
-    for (const rec of recsWithScores) {
+    for (const rec of recommendations) {
       if (tradesPlaced >= maxTrades) {
         console.log(`⚠️ Max trades reached (${maxTrades})`);
         break;
@@ -378,56 +386,6 @@ Respond with ONLY a number 0-100.`;
       if (currentPositions.some((p: any) => p.symbol === rec.symbol)) {
         console.log(`Already holding ${rec.symbol}, skipping`);
         continue;
-      }
-
-      // If low on capital, compare with weakest position and sell if new opportunity is significantly better
-      if (remainingBuyingPower < amountPerTrade && positionScores.size > 0) {
-        const weakestPos = Array.from(positionScores.entries())
-          .sort((a, b) => a[1].score - b[1].score)[0];
-        
-        const [weakSymbol, weakData] = weakestPos;
-        const scoreDiff = rec.aiScore - weakData.score;
-        
-        if (scoreDiff > 30) {
-          console.log(`💡 New opportunity ${rec.symbol} (score: ${rec.aiScore}) much better than ${weakSymbol} (score: ${weakData.score})`);
-          
-          try {
-            const sellResp = await fetch('https://api.alpaca.markets/v2/orders', {
-              method: 'POST',
-              headers: {
-                'APCA-API-KEY-ID': ALPACA_API_KEY,
-                'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                symbol: weakSymbol,
-                qty: weakData.qty,
-                side: 'sell',
-                type: 'market',
-                time_in_force: 'day',
-              }),
-            });
-            
-            if (sellResp.ok) {
-              const sellOrder = await sellResp.json();
-              sellsExecuted.push({
-                symbol: weakSymbol,
-                orderId: sellOrder.id,
-                reason: `Selling for better opportunity: ${rec.symbol} (score +${scoreDiff})`,
-                freedCapital: weakData.marketValue
-              });
-              
-              remainingBuyingPower += weakData.marketValue;
-              positionScores.delete(weakSymbol);
-              console.log(`✅ Sold ${weakSymbol}, freed $${weakData.marketValue.toFixed(2)}`);
-            } else {
-              const errorText = await sellResp.text();
-              console.error(`❌ Failed to sell ${weakSymbol}:`, errorText);
-            }
-          } catch (sellError) {
-            console.error(`❌ Sell error for ${weakSymbol}:`, sellError);
-          }
-        }
       }
 
       const currentPrice = rec.priceTarget || 100;
