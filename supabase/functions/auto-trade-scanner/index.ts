@@ -237,7 +237,7 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
     // Convert to array and sort by confidence
     const recommendations = Array.from(recommendationMap.values())
       .sort((a, b) => b.confidence - a.confidence)
-      .slice(0, 3) // Top 3 recommendations
+      .slice(0, 10) // Top 10 recommendations for more diversification
       .map(rec => ({
         ...rec,
         reasoning: rec.geminiReasoning && rec.gptReasoning 
@@ -365,9 +365,9 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
     const stopLossPercent = 2;
     const takeProfitPercent = 6;
     
-    // Diversify across 2-3 stocks regardless of account size
-    const maxTrades = Math.min(recommendations.length, 3);
-    const amountPerTrade = (buyingPower * 0.9) / maxTrades; // 90% of buying power split across trades
+    // For small accounts, diversify across MORE stocks with smaller amounts
+    const maxTrades = buyingPower < 500 ? 8 : buyingPower < 1000 ? 6 : 5;
+    const amountPerTrade = (buyingPower * 0.9) / maxTrades; // Split capital across more positions
 
     console.log(`📊 Fractional Share Strategy: $${amountPerTrade.toFixed(2)} per position, up to ${maxTrades} trades`);
 
