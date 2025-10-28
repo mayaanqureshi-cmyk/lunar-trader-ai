@@ -281,6 +281,70 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
 
     console.log(`💰 Buying Power: $${buyingPower.toFixed(2)}, Portfolio: $${portfolioValue.toFixed(2)}`);
 
+    // Fetch current positions
+    const positionsResponse = await fetch('https://api.alpaca.markets/v2/positions', {
+      headers: {
+        'APCA-API-KEY-ID': ALPACA_API_KEY,
+        'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
+      },
+    });
+    
+    if (!positionsResponse.ok) {
+      throw new Error('Failed to fetch positions');
+    }
+    
+    const currentPositions = await positionsResponse.json();
+    console.log(`📊 Current positions: ${currentPositions.length}`);
+
+    // Score current positions with AI for comparison
+    const positionScores = new Map();
+    
+    if (currentPositions.length > 0) {
+      console.log('🔍 Analyzing current positions...');
+      
+      for (const pos of currentPositions) {
+        try {
+          const techAnalysis = await supabase.functions.invoke('analyze-multi-timeframe', {
+            body: { symbols: [pos.symbol] }
+          });
+          
+          const aiScorePrompt = `Rate this current stock position's strength (0-100):
+Symbol: ${pos.symbol}
+Current P/L: ${pos.unrealized_plpc}%
+Market Value: $${pos.market_value}
+Technical Data: ${JSON.stringify(techAnalysis.data?.technicalData?.[pos.symbol] || {})}
+
+Score based on: momentum, technical indicators, likelihood to continue performing well.
+Respond with ONLY a number 0-100.`;
+          
+          const scoreResp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: 'google/gemini-2.5-flash',
+              messages: [{ role: 'user', content: aiScorePrompt }],
+            }),
+          });
+          
+          const scoreData = await scoreResp.json();
+          const score = parseInt(scoreData.choices[0].message.content.trim());
+          
+          positionScores.set(pos.symbol, {
+            score: isNaN(score) ? 50 : score,
+            marketValue: parseFloat(pos.market_value),
+            qty: pos.qty
+          });
+          
+          console.log(`📊 ${pos.symbol} current score: ${score}`);
+        } catch (e) {
+          console.error(`Error scoring ${pos.symbol}:`, e);
+        }
+      }
+    }
+
     // Dynamic position sizing with fractional shares
     const stopLossPercent = 2;
     const takeProfitPercent = 6;
@@ -292,16 +356,79 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
     console.log(`📊 Fractional Share Strategy: $${amountPerTrade.toFixed(2)} per position, up to ${maxTrades} trades`);
 
     const tradesExecuted = [];
+    const sellsExecuted = [];
     let tradesPlaced = 0;
     let remainingBuyingPower = buyingPower * 0.9;
 
-    for (const rec of recommendations) {
+    // Add AI scores to recommendations for comparison
+    const recsWithScores = recommendations.map(r => ({
+      ...r,
+      aiScore: Math.round(r.confidence * 100)
+    }));
+
+    for (const rec of recsWithScores) {
       if (tradesPlaced >= maxTrades) {
         console.log(`⚠️ Max trades reached (${maxTrades})`);
         break;
       }
 
       if (rec.confidence < 0.70 || rec.recommendation !== 'BUY') continue;
+
+      // Check if we already have this position
+      if (currentPositions.some((p: any) => p.symbol === rec.symbol)) {
+        console.log(`Already holding ${rec.symbol}, skipping`);
+        continue;
+      }
+
+      // If low on capital, compare with weakest position and sell if new opportunity is significantly better
+      if (remainingBuyingPower < amountPerTrade && positionScores.size > 0) {
+        const weakestPos = Array.from(positionScores.entries())
+          .sort((a, b) => a[1].score - b[1].score)[0];
+        
+        const [weakSymbol, weakData] = weakestPos;
+        const scoreDiff = rec.aiScore - weakData.score;
+        
+        if (scoreDiff > 30) {
+          console.log(`💡 New opportunity ${rec.symbol} (score: ${rec.aiScore}) much better than ${weakSymbol} (score: ${weakData.score})`);
+          
+          try {
+            const sellResp = await fetch('https://api.alpaca.markets/v2/orders', {
+              method: 'POST',
+              headers: {
+                'APCA-API-KEY-ID': ALPACA_API_KEY,
+                'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                symbol: weakSymbol,
+                qty: weakData.qty,
+                side: 'sell',
+                type: 'market',
+                time_in_force: 'day',
+              }),
+            });
+            
+            if (sellResp.ok) {
+              const sellOrder = await sellResp.json();
+              sellsExecuted.push({
+                symbol: weakSymbol,
+                orderId: sellOrder.id,
+                reason: `Selling for better opportunity: ${rec.symbol} (score +${scoreDiff})`,
+                freedCapital: weakData.marketValue
+              });
+              
+              remainingBuyingPower += weakData.marketValue;
+              positionScores.delete(weakSymbol);
+              console.log(`✅ Sold ${weakSymbol}, freed $${weakData.marketValue.toFixed(2)}`);
+            } else {
+              const errorText = await sellResp.text();
+              console.error(`❌ Failed to sell ${weakSymbol}:`, errorText);
+            }
+          } catch (sellError) {
+            console.error(`❌ Sell error for ${weakSymbol}:`, sellError);
+          }
+        }
+      }
 
       const currentPrice = rec.priceTarget || 100;
       
@@ -390,6 +517,8 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
         success: true,
         scanned: symbolsToScan.length,
         recommendations: recommendations.length,
+        sellsExecuted: sellsExecuted.length,
+        sells: sellsExecuted,
         tradesExecuted: tradesExecuted.length,
         trades: tradesExecuted,
         timestamp: new Date().toISOString(),
