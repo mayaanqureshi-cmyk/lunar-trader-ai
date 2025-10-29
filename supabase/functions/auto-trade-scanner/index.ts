@@ -7,6 +7,112 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// ============= PERFORMANCE OPTIMIZATION: INDICATOR CACHE =============
+// In-memory cache for technical indicators (LRU-style with TTL)
+interface CachedIndicators {
+  data: any;
+  timestamp: number;
+  priceSnapshot: number;
+}
+
+const indicatorCache = new Map<string, CachedIndicators>();
+const CACHE_TTL_MS = 60 * 1000; // 1 minute cache
+const PRICE_CHANGE_THRESHOLD = 0.2; // Invalidate if price moves >0.2%
+
+const getCachedIndicators = (symbol: string, currentPrice: number): any | null => {
+  const cached = indicatorCache.get(symbol);
+  if (!cached) return null;
+  
+  const age = Date.now() - cached.timestamp;
+  const priceChange = Math.abs((currentPrice - cached.priceSnapshot) / cached.priceSnapshot) * 100;
+  
+  // Cache is valid if: within TTL AND price hasn't moved significantly
+  if (age < CACHE_TTL_MS && priceChange < PRICE_CHANGE_THRESHOLD) {
+    console.log(`✅ Cache hit for ${symbol} (age: ${(age / 1000).toFixed(1)}s, drift: ${priceChange.toFixed(2)}%)`);
+    return cached.data;
+  }
+  
+  console.log(`❌ Cache miss for ${symbol} (age: ${(age / 1000).toFixed(1)}s, drift: ${priceChange.toFixed(2)}%)`);
+  return null;
+};
+
+const setCachedIndicators = (symbol: string, data: any, price: number) => {
+  indicatorCache.set(symbol, {
+    data,
+    timestamp: Date.now(),
+    priceSnapshot: price
+  });
+  
+  // Simple LRU: if cache grows too large, remove oldest entries
+  if (indicatorCache.size > 200) {
+    const oldestKey = indicatorCache.keys().next().value;
+    indicatorCache.delete(oldestKey);
+  }
+};
+
+// ============= WEBSOCKET STREAMING FOR REAL-TIME DATA =============
+let alpacaWebSocket: WebSocket | null = null;
+const realtimePrices = new Map<string, number>();
+
+const connectToAlpacaStream = (apiKey: string, secretKey: string, symbols: string[]) => {
+  if (alpacaWebSocket && alpacaWebSocket.readyState === WebSocket.OPEN) {
+    console.log('✅ WebSocket already connected');
+    return alpacaWebSocket;
+  }
+
+  console.log('🔌 Connecting to Alpaca WebSocket stream...');
+  
+  const ws = new WebSocket('wss://stream.data.alpaca.markets/v2/iex');
+  
+  ws.onopen = () => {
+    console.log('✅ WebSocket connected');
+    
+    // Authenticate
+    ws.send(JSON.stringify({
+      action: 'auth',
+      key: apiKey,
+      secret: secretKey
+    }));
+    
+    // Subscribe to real-time trades for all symbols
+    ws.send(JSON.stringify({
+      action: 'subscribe',
+      trades: symbols
+    }));
+  };
+  
+  ws.onmessage = (event) => {
+    try {
+      const messages = JSON.parse(event.data);
+      if (!Array.isArray(messages)) return;
+      
+      for (const msg of messages) {
+        if (msg.T === 't') { // Trade message
+          realtimePrices.set(msg.S, msg.p); // Symbol: Price
+        }
+      }
+    } catch (e) {
+      console.error('WebSocket message error:', e);
+    }
+  };
+  
+  ws.onerror = (error) => {
+    console.error('❌ WebSocket error:', error);
+  };
+  
+  ws.onclose = () => {
+    console.log('🔌 WebSocket disconnected');
+    alpacaWebSocket = null;
+  };
+  
+  alpacaWebSocket = ws;
+  return ws;
+};
+
+const getRealtimePrice = (symbol: string): number | null => {
+  return realtimePrices.get(symbol) || null;
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -88,17 +194,68 @@ serve(async (req) => {
 
     console.log(`📊 Analyzing ${symbolsToScan.length} stocks with comprehensive metrics...`);
 
-    // Step 1: Get comprehensive technical analysis for all stocks
-    const technicalAnalysis = await supabase.functions.invoke('analyze-multi-timeframe', {
-      body: { symbols: symbolsToScan }
-    });
+    // Initialize WebSocket for real-time price streaming
+    connectToAlpacaStream(ALPACA_API_KEY, ALPACA_SECRET_KEY, symbolsToScan);
+    
+    // Wait briefly for WebSocket to connect and receive initial prices
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
-    if (technicalAnalysis.error) {
-      throw new Error(`Technical analysis failed: ${technicalAnalysis.error.message}`);
+    // Step 1: Get comprehensive technical analysis with caching
+    console.log('🚀 Fetching technical data with intelligent caching...');
+    
+    // Batch fetch: Check cache first, only request uncached symbols
+    const uncachedSymbols: string[] = [];
+    const cachedData: Record<string, any> = {};
+    
+    for (const symbol of symbolsToScan) {
+      const realtimePrice = getRealtimePrice(symbol);
+      if (realtimePrice) {
+        const cached = getCachedIndicators(symbol, realtimePrice);
+        if (cached) {
+          cachedData[symbol] = { ...cached, close: realtimePrice };
+        } else {
+          uncachedSymbols.push(symbol);
+        }
+      } else {
+        uncachedSymbols.push(symbol);
+      }
     }
+    
+    console.log(`📊 Cache performance: ${Object.keys(cachedData).length} cached, ${uncachedSymbols.length} need refresh`);
+    
+    // Only fetch technical data for uncached symbols (HUGE speedup!)
+    let technicalData: any = { technicalData: cachedData };
+    
+    if (uncachedSymbols.length > 0) {
+      const technicalAnalysis = await supabase.functions.invoke('analyze-multi-timeframe', {
+        body: { symbols: uncachedSymbols }
+      });
 
-    const technicalData = technicalAnalysis.data;
-    console.log(`✅ Technical analysis complete for ${symbolsToScan.length} stocks`);
+      if (technicalAnalysis.error) {
+        throw new Error(`Technical analysis failed: ${technicalAnalysis.error.message}`);
+      }
+
+      const freshData = technicalAnalysis.data.technicalData || {};
+      
+      // Cache the fresh data
+      for (const [symbol, data] of Object.entries(freshData)) {
+        setCachedIndicators(symbol, data, (data as any).close);
+      }
+      
+      // Merge cached + fresh data
+      technicalData.technicalData = { ...cachedData, ...freshData };
+    }
+    
+    console.log(`✅ Technical analysis complete for ${symbolsToScan.length} stocks (${uncachedSymbols.length} API calls saved!)`);
+    
+    // Enrich with real-time WebSocket prices where available
+    for (const symbol of symbolsToScan) {
+      const realtimePrice = getRealtimePrice(symbol);
+      if (realtimePrice && technicalData.technicalData[symbol]) {
+        technicalData.technicalData[symbol].close = realtimePrice;
+        technicalData.technicalData[symbol].isRealtime = true;
+      }
+    }
 
     // Step 2: Analyze with multiple AI models for consensus
     const aiPrompt = `You are an elite algorithmic trader. Analyze these stocks with their COMPREHENSIVE TECHNICAL DATA and identify the TOP 1-2 stocks with HIGHEST probability of making a >3% move TODAY.
