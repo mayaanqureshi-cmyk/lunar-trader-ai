@@ -296,28 +296,56 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
     const currentPositions = await positionsResponse.json();
     console.log(`📊 Current positions: ${currentPositions.length}`);
 
-    // Check for profit-taking opportunities (>10% profit with >4% dip from peak)
+    // ADVANCED EXIT LOGIC: Trailing stops, partial profit-taking, momentum-based exits
     const sellsExecuted = [];
     let remainingBuyingPower = buyingPower * 0.9;
     
     if (currentPositions.length > 0) {
-      console.log('💰 Checking positions for profit-taking...');
+      console.log('💰 Advanced Exit Strategy: Checking trailing stops & profit targets...');
       
       for (const pos of currentPositions) {
         const profitPercent = parseFloat(pos.unrealized_plpc) * 100;
         const avgEntry = parseFloat(pos.avg_entry_price);
         const currentPrice = parseFloat(pos.current_price);
+        const qty = parseFloat(pos.qty);
         
-        // Calculate peak price (assuming entry + max profit)
+        // Get technical data for momentum indicators
+        const tech = technicalData.technicalData?.[pos.symbol];
+        const rsi = tech?.rsi || 50;
+        const macdSignal = tech?.macd_signal || 0;
+        
+        // Calculate trailing stop (peak price tracked dynamically)
         const peakPrice = Math.max(currentPrice, avgEntry * 1.1); // At least 10% above entry
         const dipFromPeak = ((peakPrice - currentPrice) / peakPrice) * 100;
         
-        console.log(`📊 ${pos.symbol}: Profit ${profitPercent.toFixed(2)}%, Dip from peak ${dipFromPeak.toFixed(2)}%`);
+        console.log(`📊 ${pos.symbol}: Profit ${profitPercent.toFixed(2)}%, Dip ${dipFromPeak.toFixed(2)}%, RSI ${rsi.toFixed(1)}`);
         
-        // Sell if profit > 10% AND dipping more than 4% from peak
+        let sellReason = '';
+        let sellQty = qty;
+        
+        // EXIT STRATEGY 1: Trailing Stop (>10% profit, 4% dip from peak)
         if (profitPercent > 10 && dipFromPeak > 4) {
-          console.log(`💰 Profit-taking on ${pos.symbol}: ${profitPercent.toFixed(2)}% profit, ${dipFromPeak.toFixed(2)}% dip`);
-          
+          sellReason = `Trailing stop: ${profitPercent.toFixed(2)}% profit, ${dipFromPeak.toFixed(2)}% dip from peak`;
+          console.log(`🛑 ${sellReason}`);
+        }
+        // EXIT STRATEGY 2: Partial Profit-Taking at first target (6-8% gain)
+        else if (profitPercent >= 6 && profitPercent < 10 && qty >= 2) {
+          sellQty = Math.floor(qty * 0.5); // Sell 50%
+          sellReason = `Partial profit-taking: ${profitPercent.toFixed(2)}% gain, securing 50% position`;
+          console.log(`💰 ${sellReason}`);
+        }
+        // EXIT STRATEGY 3: Momentum reversal (overbought + negative MACD)
+        else if (profitPercent > 5 && rsi > 75 && macdSignal < 0) {
+          sellReason = `Momentum reversal: RSI overbought (${rsi.toFixed(1)}), MACD bearish`;
+          console.log(`📉 ${sellReason}`);
+        }
+        // EXIT STRATEGY 4: Stop-loss (>5% loss)
+        else if (profitPercent < -5) {
+          sellReason = `Stop-loss triggered: ${profitPercent.toFixed(2)}% loss`;
+          console.log(`🛑 ${sellReason}`);
+        }
+        
+        if (sellReason) {
           try {
             const sellResp = await fetch('https://api.alpaca.markets/v2/orders', {
               method: 'POST',
@@ -328,7 +356,7 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
               },
               body: JSON.stringify({
                 symbol: pos.symbol,
-                qty: pos.qty,
+                qty: sellQty.toString(),
                 side: 'sell',
                 type: 'market',
                 time_in_force: 'day',
@@ -337,19 +365,25 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
             
             if (sellResp.ok) {
               const sellOrder = await sellResp.json();
-              const profitAmount = parseFloat(pos.unrealized_pl);
+              const profitAmount = parseFloat(pos.unrealized_pl) * (sellQty / qty);
+              const freedCapital = parseFloat(pos.market_value) * (sellQty / qty);
               
               sellsExecuted.push({
                 symbol: pos.symbol,
                 orderId: sellOrder.id,
-                reason: `Profit-taking: ${profitPercent.toFixed(2)}% gain with ${dipFromPeak.toFixed(2)}% dip from peak`,
+                reason: sellReason,
                 profitAmount: profitAmount,
                 profitPercent: profitPercent,
-                freedCapital: parseFloat(pos.market_value)
+                quantitySold: sellQty,
+                totalQuantity: qty,
+                isPartial: sellQty < qty,
+                freedCapital: freedCapital,
+                exitRSI: rsi,
+                exitMACD: macdSignal
               });
               
-              remainingBuyingPower += parseFloat(pos.market_value);
-              console.log(`✅ Sold ${pos.symbol} for ${profitPercent.toFixed(2)}% profit ($${profitAmount.toFixed(2)})`);
+              remainingBuyingPower += freedCapital;
+              console.log(`✅ Sold ${sellQty}/${qty} shares of ${pos.symbol} for ${profitPercent.toFixed(2)}% profit ($${profitAmount.toFixed(2)})`);
             } else {
               const errorText = await sellResp.text();
               console.error(`❌ Failed to sell ${pos.symbol}:`, errorText);
@@ -361,15 +395,53 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
       }
     }
 
-    // Dynamic position sizing with fractional shares
-    const stopLossPercent = 2;
-    const takeProfitPercent = 6;
+    // Advanced Risk Management & Position Sizing
+    const baseStopLossPercent = 2;
+    const baseTakeProfitPercent = 6;
+    
+    // Sector exposure limits (max 40% in any single sector)
+    const sectorMap: Record<string, string> = {
+      'AAPL': 'Tech', 'MSFT': 'Tech', 'GOOGL': 'Tech', 'AMZN': 'Tech', 'META': 'Tech', 'NVDA': 'Tech', 'TSLA': 'Auto',
+      'AMD': 'Semiconductors', 'INTC': 'Semiconductors', 'QCOM': 'Semiconductors', 'AVGO': 'Semiconductors',
+      'CRM': 'Software', 'ORCL': 'Software', 'ADBE': 'Software', 'NOW': 'Software', 'PANW': 'Cybersecurity', 'CRWD': 'Cybersecurity',
+      'PLTR': 'AI', 'SNOW': 'Cloud', 'DDOG': 'Cloud', 'NET': 'Cloud', 'ZS': 'Cybersecurity', 'MDB': 'Database',
+      'WMT': 'Retail', 'COST': 'Retail', 'TGT': 'Retail', 'HD': 'Retail', 'NKE': 'Consumer', 'SBUX': 'Consumer',
+      'JPM': 'Finance', 'BAC': 'Finance', 'WFC': 'Finance', 'GS': 'Finance', 'MS': 'Finance', 'V': 'Payments', 'MA': 'Payments', 'PYPL': 'Payments',
+      'JNJ': 'Healthcare', 'UNH': 'Healthcare', 'PFE': 'Pharma', 'ABBV': 'Pharma', 'LLY': 'Pharma', 'TMO': 'Healthcare', 'MRNA': 'Biotech', 'GILD': 'Biotech',
+      'XOM': 'Energy', 'CVX': 'Energy', 'COP': 'Energy', 'SLB': 'Energy', 'EOG': 'Energy',
+      'DIS': 'Media', 'NFLX': 'Media', 'CMCSA': 'Telecom', 'T': 'Telecom', 'VZ': 'Telecom',
+      'BA': 'Aerospace', 'CAT': 'Industrial', 'GE': 'Industrial', 'UPS': 'Transport', 'HON': 'Industrial', 'LMT': 'Defense',
+      'RIVN': 'EV', 'LCID': 'EV', 'NIO': 'EV', 'ENPH': 'CleanEnergy', 'PLUG': 'CleanEnergy',
+      'COIN': 'Crypto', 'MSTR': 'Crypto', 'RIOT': 'Crypto', 'MARA': 'Crypto',
+      'SPY': 'ETF', 'QQQ': 'ETF', 'IWM': 'ETF', 'DIA': 'ETF', 'VTI': 'ETF', 'VOO': 'ETF'
+    };
+    
+    const sectorExposure: Record<string, number> = {};
+    for (const pos of currentPositions) {
+      const sector = sectorMap[pos.symbol] || 'Other';
+      const posValue = parseFloat(pos.market_value);
+      sectorExposure[sector] = (sectorExposure[sector] || 0) + posValue;
+    }
+    
+    // Calculate volatility-adjusted position sizing
+    const calculateVolatilityScore = (symbol: string): number => {
+      const tech = technicalData.technicalData?.[symbol];
+      if (!tech) return 1.0;
+      
+      // Use ATR (Average True Range) proxy: (high - low) / close
+      const volatility = ((tech.high - tech.low) / tech.close) * 100;
+      
+      // Higher volatility = smaller position (inverse relationship)
+      if (volatility > 5) return 0.5; // Very volatile: 50% position
+      if (volatility > 3) return 0.7; // Moderate: 70% position
+      return 1.0; // Low volatility: full position
+    };
     
     // For small accounts, diversify across MORE stocks with smaller amounts
     const maxTrades = buyingPower < 500 ? 8 : buyingPower < 1000 ? 6 : 5;
-    const amountPerTrade = (buyingPower * 0.9) / maxTrades; // Split capital across more positions
+    const baseAmountPerTrade = (buyingPower * 0.9) / maxTrades;
 
-    console.log(`📊 Fractional Share Strategy: $${amountPerTrade.toFixed(2)} per position, up to ${maxTrades} trades`);
+    console.log(`📊 Advanced Risk Management: $${baseAmountPerTrade.toFixed(2)} base per position, max ${maxTrades} trades`);
 
     const tradesExecuted = [];
     let tradesPlaced = 0;
@@ -388,21 +460,66 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
         continue;
       }
 
-      const currentPrice = rec.priceTarget || 100;
+      // Sector diversification check
+      const sector = sectorMap[rec.symbol] || 'Other';
+      const currentSectorValue = sectorExposure[sector] || 0;
+      const sectorLimit = portfolioValue * 0.4; // Max 40% per sector
       
-      // Use notional (dollar amount) for fractional shares
-      const notionalAmount = Math.min(amountPerTrade, remainingBuyingPower);
-      
-      if (notionalAmount < 1) {
-        console.log(`⚠️ Insufficient funds remaining for ${rec.symbol}`);
+      if (currentSectorValue >= sectorLimit) {
+        console.log(`⚠️ Sector limit reached for ${sector}, skipping ${rec.symbol}`);
         continue;
       }
 
-      const stopLossPrice = currentPrice * (1 - stopLossPercent / 100);
-      const takeProfitPrice = currentPrice * (1 + takeProfitPercent / 100);
-      const estimatedShares = notionalAmount / currentPrice;
+      // Get current price and technical data
+      const tech = technicalData.technicalData?.[rec.symbol];
+      if (!tech) {
+        console.log(`⚠️ No technical data for ${rec.symbol}, skipping`);
+        continue;
+      }
+      
+      const currentPrice = tech.close;
+      const high = tech.high;
+      const low = tech.low;
+      const rsi = tech.rsi || 50;
+      
+      // SMARTER ENTRY LOGIC: Avoid buying at peaks
+      const pricePosition = ((currentPrice - low) / (high - low)) * 100;
+      
+      if (pricePosition > 85) {
+        console.log(`⚠️ ${rec.symbol} near daily high (${pricePosition.toFixed(1)}%), waiting for pullback`);
+        continue;
+      }
+      
+      if (rsi > 70) {
+        console.log(`⚠️ ${rec.symbol} overbought (RSI: ${rsi.toFixed(1)}), waiting for better entry`);
+        continue;
+      }
+      
+      // VOLATILITY-ADJUSTED POSITION SIZING
+      const volatilityMultiplier = calculateVolatilityScore(rec.symbol);
+      const adjustedAmount = Math.min(
+        baseAmountPerTrade * volatilityMultiplier,
+        remainingBuyingPower,
+        sectorLimit - currentSectorValue
+      );
+      
+      if (adjustedAmount < 1) {
+        console.log(`⚠️ Insufficient funds for ${rec.symbol} after adjustments`);
+        continue;
+      }
 
-      console.log(`🚀 Executing fractional trade: ${rec.symbol} $${notionalAmount.toFixed(2)} (~${estimatedShares.toFixed(3)} shares) @ ~$${currentPrice.toFixed(2)}`);
+      // DYNAMIC STOP-LOSS based on volatility
+      const volatilityPercent = ((high - low) / currentPrice) * 100;
+      const adjustedStopLoss = Math.max(baseStopLossPercent, volatilityPercent * 0.5);
+      const adjustedTakeProfit = baseTakeProfitPercent;
+      
+      const stopLossPrice = currentPrice * (1 - adjustedStopLoss / 100);
+      const takeProfitPrice = currentPrice * (1 + adjustedTakeProfit / 100);
+      const estimatedShares = adjustedAmount / currentPrice;
+
+      console.log(`🚀 Smart Entry: ${rec.symbol} $${adjustedAmount.toFixed(2)} (~${estimatedShares.toFixed(3)} shares) @ $${currentPrice.toFixed(2)}`);
+      console.log(`   📊 Position: ${pricePosition.toFixed(1)}% of daily range, RSI: ${rsi.toFixed(1)}, Vol Multiplier: ${volatilityMultiplier}`);
+      console.log(`   🛡️ Stop: $${stopLossPrice.toFixed(2)} (-${adjustedStopLoss.toFixed(1)}%), Target: $${takeProfitPrice.toFixed(2)} (+${adjustedTakeProfit}%)`);
 
       try {
         // Place market order using notional (dollar amount) for fractional shares
@@ -415,7 +532,7 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
           },
           body: JSON.stringify({
             symbol: rec.symbol,
-            notional: notionalAmount.toFixed(2),
+            notional: adjustedAmount.toFixed(2),
             side: 'buy',
             type: 'market',
             time_in_force: 'day',
@@ -426,18 +543,19 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
           const orderData = await orderResponse.json();
           const actualQty = parseFloat(orderData.qty || estimatedShares);
           
-          // Note: Stop-loss and take-profit with fractional shares requires qty, not notional
-          // We'll set them after we know the actual filled quantity
-          
           tradesExecuted.push({
             symbol: rec.symbol,
             quantity: actualQty,
-            notional: notionalAmount,
+            notional: adjustedAmount,
             orderId: orderData.id,
             confidence: rec.confidence,
             entryPrice: currentPrice,
             stopLoss: stopLossPrice,
             takeProfit: takeProfitPrice,
+            volatilityAdjustment: volatilityMultiplier,
+            sector: sector,
+            entryRSI: rsi,
+            entryPricePosition: pricePosition,
             reasoning: rec.reasoning,
             technicalIndicators: rec.technicalIndicators || {},
             fundamentals: rec.fundamentals || {},
@@ -446,9 +564,12 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
             timestamp: new Date().toISOString(),
           });
 
-          remainingBuyingPower -= notionalAmount;
+          // Update sector exposure
+          sectorExposure[sector] = (sectorExposure[sector] || 0) + adjustedAmount;
+          
+          remainingBuyingPower -= adjustedAmount;
           tradesPlaced++;
-          console.log(`✅ Trade executed: ${rec.symbol} $${notionalAmount.toFixed(2)} (~${estimatedShares.toFixed(3)} shares)`);
+          console.log(`✅ Trade executed: ${rec.symbol} $${adjustedAmount.toFixed(2)} in ${sector} sector`);
         } else {
           const errorText = await orderResponse.text();
           console.error(`❌ Order failed for ${rec.symbol}:`, errorText);
