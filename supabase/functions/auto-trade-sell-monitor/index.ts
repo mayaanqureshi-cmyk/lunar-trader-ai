@@ -27,7 +27,7 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
     // Check if market is open
-    const clockResponse = await fetch('https://api.alpaca.markets/v2/clock', {
+    const clockResponse = await fetch('https://paper-api.alpaca.markets/v2/clock', {
       headers: {
         'APCA-API-KEY-ID': ALPACA_API_KEY,
         'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
@@ -43,7 +43,7 @@ serve(async (req) => {
     }
 
     // Fetch current positions
-    const positionsResponse = await fetch('https://api.alpaca.markets/v2/positions', {
+    const positionsResponse = await fetch('https://paper-api.alpaca.markets/v2/positions', {
       headers: {
         'APCA-API-KEY-ID': ALPACA_API_KEY,
         'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
@@ -173,7 +173,7 @@ Respond with JSON:
       try {
         console.log(`Executing SELL for ${decision.symbol} (${decision.qty} shares)`);
 
-        const sellResponse = await fetch('https://api.alpaca.markets/v2/orders', {
+        const sellResponse = await fetch('https://paper-api.alpaca.markets/v2/orders', {
           method: 'POST',
           headers: {
             'APCA-API-KEY-ID': ALPACA_API_KEY,

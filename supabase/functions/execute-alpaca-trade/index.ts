@@ -23,7 +23,7 @@ serve(async (req) => {
     }
 
     // Check account status first
-    const accountResponse = await fetch('https://api.alpaca.markets/v2/account', {
+    const accountResponse = await fetch('https://paper-api.alpaca.markets/v2/account', {
       headers: {
         'APCA-API-KEY-ID': ALPACA_API_KEY,
         'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
@@ -58,7 +58,7 @@ serve(async (req) => {
 
     console.log('Placing order:', alpacaOrderPayload);
 
-    const orderResponse = await fetch('https://api.alpaca.markets/v2/orders', {
+    const orderResponse = await fetch('https://paper-api.alpaca.markets/v2/orders', {
       method: 'POST',
       headers: {
         'APCA-API-KEY-ID': ALPACA_API_KEY,
@@ -91,7 +91,7 @@ serve(async (req) => {
           time_in_force: 'gtc',
         };
         bracketOrders.push(
-          fetch('https://api.alpaca.markets/v2/orders', {
+          fetch('https://paper-api.alpaca.markets/v2/orders', {
             method: 'POST',
             headers: {
               'APCA-API-KEY-ID': ALPACA_API_KEY,
@@ -113,7 +113,7 @@ serve(async (req) => {
           time_in_force: 'gtc',
         };
         bracketOrders.push(
-          fetch('https://api.alpaca.markets/v2/orders', {
+          fetch('https://paper-api.alpaca.markets/v2/orders', {
             method: 'POST',
             headers: {
               'APCA-API-KEY-ID': ALPACA_API_KEY,

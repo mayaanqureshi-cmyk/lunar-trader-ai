@@ -85,7 +85,7 @@ serve(async (req) => {
     }
 
     // Check real market status via Alpaca clock
-    const clockResp = await fetch('https://api.alpaca.markets/v2/clock', {
+    const clockResp = await fetch('https://paper-api.alpaca.markets/v2/clock', {
       headers: {
         'APCA-API-KEY-ID': ALPACA_API_KEY,
         'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
@@ -357,7 +357,7 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
     }
 
     // Check Alpaca account
-    const accountResponse = await fetch('https://api.alpaca.markets/v2/account', {
+    const accountResponse = await fetch('https://paper-api.alpaca.markets/v2/account', {
       headers: {
         'APCA-API-KEY-ID': ALPACA_API_KEY,
         'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
@@ -375,7 +375,7 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
     console.log(`💰 Buying Power: $${buyingPower.toFixed(2)}, Portfolio: $${portfolioValue.toFixed(2)}`);
 
     // Fetch current positions
-    const positionsResponse = await fetch('https://api.alpaca.markets/v2/positions', {
+    const positionsResponse = await fetch('https://paper-api.alpaca.markets/v2/positions', {
       headers: {
         'APCA-API-KEY-ID': ALPACA_API_KEY,
         'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
@@ -440,7 +440,7 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
         
         if (sellReason) {
           try {
-            const sellResp = await fetch('https://api.alpaca.markets/v2/orders', {
+            const sellResp = await fetch('https://paper-api.alpaca.markets/v2/orders', {
               method: 'POST',
               headers: {
                 'APCA-API-KEY-ID': ALPACA_API_KEY,

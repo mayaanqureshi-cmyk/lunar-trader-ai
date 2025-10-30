@@ -21,7 +21,7 @@ serve(async (req) => {
     console.log('Fetching Alpaca account data...');
 
     // Fetch account information
-    const accountResponse = await fetch('https://api.alpaca.markets/v2/account', {
+    const accountResponse = await fetch('https://paper-api.alpaca.markets/v2/account', {
       headers: {
         'APCA-API-KEY-ID': ALPACA_API_KEY,
         'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
@@ -37,7 +37,7 @@ serve(async (req) => {
     const accountData = await accountResponse.json();
 
     // Fetch current positions
-    const positionsResponse = await fetch('https://api.alpaca.markets/v2/positions', {
+    const positionsResponse = await fetch('https://paper-api.alpaca.markets/v2/positions', {
       headers: {
         'APCA-API-KEY-ID': ALPACA_API_KEY,
         'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
@@ -47,7 +47,7 @@ serve(async (req) => {
     const positions = positionsResponse.ok ? await positionsResponse.json() : [];
 
     // Fetch recent orders
-    const ordersResponse = await fetch('https://api.alpaca.markets/v2/orders?status=all&limit=10', {
+    const ordersResponse = await fetch('https://paper-api.alpaca.markets/v2/orders?status=all&limit=10', {
       headers: {
         'APCA-API-KEY-ID': ALPACA_API_KEY,
         'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
