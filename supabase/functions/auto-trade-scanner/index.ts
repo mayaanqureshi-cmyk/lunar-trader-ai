@@ -193,34 +193,34 @@ serve(async (req) => {
     
     console.log(`✅ Technical analysis complete: ${Object.keys(cachedData).length} from cache, ${uncachedSymbols.length} fetched (${Object.keys(cachedData).length > 0 ? ((Object.keys(cachedData).length / symbolsToScan.length) * 100).toFixed(1) : 0}% cache hit rate)`);
 
-    // Step 2: Analyze with multiple AI models for consensus
-    const aiPrompt = `You are an elite algorithmic trader. Analyze these stocks with their COMPREHENSIVE TECHNICAL DATA and identify the TOP 1-2 stocks with HIGHEST probability of making a >3% move TODAY.
+    // Step 2: Analyze with multiple AI models - OPTIMIZED FOR MAXIMUM PROFIT
+    const aiPrompt = `You are an aggressive algorithmic trader focused on MAXIMUM PROFIT. Analyze these stocks and identify the TOP 5-7 stocks with HIGHEST profit potential for TODAY.
 
 TECHNICAL DATA:
 ${JSON.stringify(technicalData, null, 2)}
 
-Return ONLY a JSON array with 1-2 stocks in this exact format:
+Return ONLY a JSON array with 5-7 stocks in this exact format:
 [
   {
     "symbol": "NVDA",
     "recommendation": "BUY",
     "confidence": 0.85,
-    "reasoning": "Strong momentum across all timeframes, RSI oversold bounce on daily, MACD bullish crossover, ADX shows strong trend, volume spike 140%",
+    "reasoning": "Explosive momentum, volume surge 200%, breaking resistance with strong RSI momentum",
     "priceTarget": 145.50,
     "stopLoss": 142.00,
     "technicalScore": 8.5,
-    "riskReward": "1:3"
+    "riskReward": "1:4"
   }
 ]
 
-CRITERIA:
-- Confidence >70% (lowered from 80%)
-- Technical score >6.5/10 (lowered from 7.5)
-- Strong volume or momentum signals
-- Clear trend direction
-- Positive risk/reward setup
+AGGRESSIVE CRITERIA FOR MAX PROFIT:
+- Confidence >62% (accept more opportunities)
+- Technical score >6/10 (be more aggressive)
+- Prioritize: High volume, momentum breakouts, strong trends
+- Focus on PROFIT POTENTIAL over safety
+- Look for: Gap ups, volume spikes, momentum surges, breakout patterns
 
-Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum criteria, return empty array: []`;
+Return TOP 5-7 HIGH-PROFIT opportunities. Be aggressive - we want to maximize gains!`;
 
     // Query Gemini 2.5 Flash
     const geminiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -271,12 +271,12 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
     console.log(`🤖 Gemini recommended: ${geminiRecs.length} stocks`);
     console.log(`🤖 GPT-5 Mini recommended: ${gptRecs.length} stocks`);
 
-    // Step 3: Combine recommendations from both AIs (not just consensus)
+    // Step 3: Combine recommendations - AGGRESSIVE MODE (accept 62%+ confidence)
     const recommendationMap = new Map();
     
-    // Add all Gemini recommendations
+    // Add all Gemini recommendations with lower threshold
     for (const rec of geminiRecs) {
-      if (rec.confidence >= 0.70 && rec.recommendation === 'BUY') {
+      if (rec.confidence >= 0.62 && rec.recommendation === 'BUY') {
         recommendationMap.set(rec.symbol, {
           symbol: rec.symbol,
           recommendation: 'BUY',
@@ -294,9 +294,9 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
       }
     }
     
-    // Add/merge GPT recommendations
+    // Add/merge GPT recommendations with lower threshold
     for (const rec of gptRecs) {
-      if (rec.confidence >= 0.70 && rec.recommendation === 'BUY') {
+      if (rec.confidence >= 0.62 && rec.recommendation === 'BUY') {
         const existing = recommendationMap.get(rec.symbol);
         if (existing) {
           // Both AIs recommend - upgrade to consensus
@@ -327,10 +327,15 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
       }
     }
     
-    // Convert to array and sort by confidence
+    // Convert to array and sort - PRIORITIZE HIGH-CONVICTION TRADES
     const recommendations = Array.from(recommendationMap.values())
-      .sort((a, b) => b.confidence - a.confidence)
-      .slice(0, 10) // Top 10 recommendations for more diversification
+      .sort((a, b) => {
+        // Prioritize consensus trades with momentum bonus
+        const aBonus = a.aiConsensus.includes('CONSENSUS') ? 0.15 : 0;
+        const bBonus = b.aiConsensus.includes('CONSENSUS') ? 0.15 : 0;
+        return (b.confidence + bBonus) - (a.confidence + aBonus);
+      })
+      .slice(0, 15) // Top 15 for maximum opportunities
       .map(rec => ({
         ...rec,
         reasoning: rec.geminiReasoning && rec.gptReasoning 
@@ -488,11 +493,11 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
       }
     }
 
-    // Advanced Risk Management & Position Sizing
-    const baseStopLossPercent = 2;
-    const baseTakeProfitPercent = 6;
+    // AGGRESSIVE PROFIT-FOCUSED RISK MANAGEMENT
+    const baseStopLossPercent = 3; // Wider stops for more breathing room
+    const baseTakeProfitPercent = 8; // Higher profit targets
     
-    // Sector exposure limits (max 40% in any single sector)
+    // Sector exposure limits (max 50% in any single sector for aggressive growth)
     const sectorMap: Record<string, string> = {
       'AAPL': 'Tech', 'MSFT': 'Tech', 'GOOGL': 'Tech', 'AMZN': 'Tech', 'META': 'Tech', 'NVDA': 'Tech', 'TSLA': 'Auto',
       'AMD': 'Semiconductors', 'INTC': 'Semiconductors', 'QCOM': 'Semiconductors', 'AVGO': 'Semiconductors',
@@ -516,25 +521,37 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
       sectorExposure[sector] = (sectorExposure[sector] || 0) + posValue;
     }
     
-    // Calculate volatility-adjusted position sizing
-    const calculateVolatilityScore = (symbol: string): number => {
+    // Calculate momentum-adjusted position sizing (AGGRESSIVE)
+    const calculatePositionMultiplier = (symbol: string, confidence: number, aiConsensus: string): number => {
       const tech = technicalData.technicalData?.[symbol];
       if (!tech) return 1.0;
       
-      // Use ATR (Average True Range) proxy: (high - low) / close
-      const volatility = ((tech.high - tech.low) / tech.close) * 100;
+      let multiplier = 1.0;
       
-      // Higher volatility = smaller position (inverse relationship)
-      if (volatility > 5) return 0.5; // Very volatile: 50% position
-      if (volatility > 3) return 0.7; // Moderate: 70% position
-      return 1.0; // Low volatility: full position
+      // BONUS: AI consensus gets bigger positions
+      if (aiConsensus.includes('CONSENSUS')) multiplier *= 1.3;
+      
+      // BONUS: High confidence gets bigger positions
+      if (confidence > 0.80) multiplier *= 1.2;
+      else if (confidence > 0.75) multiplier *= 1.1;
+      
+      // BONUS: Volume surge = bigger position
+      const volumeRatio = tech.volume_ratio || 1.0;
+      if (volumeRatio > 2.0) multiplier *= 1.2; // 2x volume
+      else if (volumeRatio > 1.5) multiplier *= 1.1; // 1.5x volume
+      
+      // Slight reduction for extreme volatility only
+      const volatility = ((tech.high - tech.low) / tech.close) * 100;
+      if (volatility > 8) multiplier *= 0.8; // Only reduce for extreme volatility
+      
+      return Math.min(multiplier, 1.5); // Cap at 150% position size
     };
     
-    // For small accounts, diversify across MORE stocks with smaller amounts
-    const maxTrades = buyingPower < 500 ? 8 : buyingPower < 1000 ? 6 : 5;
-    const baseAmountPerTrade = (buyingPower * 0.9) / maxTrades;
+    // AGGRESSIVE: Take more positions with higher capital allocation
+    const maxTrades = buyingPower < 500 ? 10 : buyingPower < 1000 ? 8 : 7;
+    const baseAmountPerTrade = (buyingPower * 0.95) / maxTrades; // Use 95% of capital
 
-    console.log(`📊 Advanced Risk Management: $${baseAmountPerTrade.toFixed(2)} base per position, max ${maxTrades} trades`);
+    console.log(`🚀 AGGRESSIVE MODE: $${baseAmountPerTrade.toFixed(2)} base per position, max ${maxTrades} trades (95% capital deployment)`);
 
     const tradesExecuted = [];
     let tradesPlaced = 0;
@@ -545,7 +562,7 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
         break;
       }
 
-      if (rec.confidence < 0.70 || rec.recommendation !== 'BUY') continue;
+      if (rec.confidence < 0.62 || rec.recommendation !== 'BUY') continue; // Aggressive 62% threshold
 
       // Check if we already have this position
       if (currentPositions.some((p: any) => p.symbol === rec.symbol)) {
@@ -553,10 +570,10 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
         continue;
       }
 
-      // Sector diversification check
+      // Sector diversification check (relaxed for max profit)
       const sector = sectorMap[rec.symbol] || 'Other';
       const currentSectorValue = sectorExposure[sector] || 0;
-      const sectorLimit = portfolioValue * 0.4; // Max 40% per sector
+      const sectorLimit = portfolioValue * 0.5; // Max 50% per sector (aggressive)
       
       if (currentSectorValue >= sectorLimit) {
         console.log(`⚠️ Sector limit reached for ${sector}, skipping ${rec.symbol}`);
@@ -575,23 +592,25 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
       const low = tech.low;
       const rsi = tech.rsi || 50;
       
-      // SMARTER ENTRY LOGIC: Avoid buying at peaks
+      // AGGRESSIVE ENTRY: Ride momentum, don't fear peaks
       const pricePosition = ((currentPrice - low) / (high - low)) * 100;
       
-      if (pricePosition > 85) {
-        console.log(`⚠️ ${rec.symbol} near daily high (${pricePosition.toFixed(1)}%), waiting for pullback`);
+      // Only avoid extreme peaks during breakouts
+      if (pricePosition > 95 && rsi > 75) {
+        console.log(`⚠️ ${rec.symbol} extremely overbought, waiting briefly`);
         continue;
       }
       
-      if (rsi > 70) {
-        console.log(`⚠️ ${rec.symbol} overbought (RSI: ${rsi.toFixed(1)}), waiting for better entry`);
+      // Accept higher RSI for strong momentum trades
+      if (rsi > 80 && tech.volume_ratio < 1.5) {
+        console.log(`⚠️ ${rec.symbol} overbought without volume, skipping`);
         continue;
       }
       
-      // VOLATILITY-ADJUSTED POSITION SIZING
-      const volatilityMultiplier = calculateVolatilityScore(rec.symbol);
+      // MOMENTUM & CONFIDENCE-ADJUSTED POSITION SIZING (AGGRESSIVE)
+      const positionMultiplier = calculatePositionMultiplier(rec.symbol, rec.confidence, rec.aiConsensus);
       const adjustedAmount = Math.min(
-        baseAmountPerTrade * volatilityMultiplier,
+        baseAmountPerTrade * positionMultiplier,
         remainingBuyingPower,
         sectorLimit - currentSectorValue
       );
@@ -610,13 +629,14 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
       const takeProfitPrice = currentPrice * (1 + adjustedTakeProfit / 100);
       const estimatedShares = adjustedAmount / currentPrice;
 
-      console.log(`🚀 Smart Entry: ${rec.symbol} $${adjustedAmount.toFixed(2)} (~${estimatedShares.toFixed(3)} shares) @ $${currentPrice.toFixed(2)}`);
-      console.log(`   📊 Position: ${pricePosition.toFixed(1)}% of daily range, RSI: ${rsi.toFixed(1)}, Vol Multiplier: ${volatilityMultiplier}`);
-      console.log(`   🛡️ Stop: $${stopLossPrice.toFixed(2)} (-${adjustedStopLoss.toFixed(1)}%), Target: $${takeProfitPrice.toFixed(2)} (+${adjustedTakeProfit}%)`);
+      console.log(`🚀 AGGRESSIVE ENTRY: ${rec.symbol} $${adjustedAmount.toFixed(2)} (~${estimatedShares.toFixed(3)} shares) @ $${currentPrice.toFixed(2)}`);
+      console.log(`   💰 Multiplier: ${positionMultiplier.toFixed(2)}x | ${rec.aiConsensus} | Confidence: ${(rec.confidence * 100).toFixed(0)}%`);
+      console.log(`   📊 RSI: ${rsi.toFixed(1)} | Volume: ${(tech.volume_ratio || 1).toFixed(1)}x | Position: ${pricePosition.toFixed(0)}%`);
+      console.log(`   🎯 Target: $${takeProfitPrice.toFixed(2)} (+${adjustedTakeProfit}%) | Stop: $${stopLossPrice.toFixed(2)} (-${adjustedStopLoss.toFixed(1)}%)`);
 
       try {
         // Place market order using notional (dollar amount) for fractional shares
-        const orderResponse = await fetch('https://api.alpaca.markets/v2/orders', {
+        const orderResponse = await fetch('https://paper-api.alpaca.markets/v2/orders', {
           method: 'POST',
           headers: {
             'APCA-API-KEY-ID': ALPACA_API_KEY,
@@ -645,7 +665,8 @@ Return TOP 2-3 opportunities even if not perfect. If no stocks meet minimum crit
             entryPrice: currentPrice,
             stopLoss: stopLossPrice,
             takeProfit: takeProfitPrice,
-            volatilityAdjustment: volatilityMultiplier,
+            positionMultiplier: positionMultiplier,
+            aiConsensus: rec.aiConsensus,
             sector: sector,
             entryRSI: rsi,
             entryPricePosition: pricePosition,
