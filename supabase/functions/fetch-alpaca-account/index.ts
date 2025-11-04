@@ -31,7 +31,19 @@ serve(async (req) => {
     if (!accountResponse.ok) {
       const errorText = await accountResponse.text();
       console.error('Account fetch failed:', errorText);
-      throw new Error(`Account fetch failed: ${accountResponse.status}`);
+      
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: accountResponse.status === 401 
+            ? 'Invalid Alpaca API credentials. Please update your ALPACA_API_KEY and ALPACA_SECRET_KEY with valid paper trading keys.'
+            : `Account fetch failed: ${accountResponse.status}`
+        }),
+        { 
+          status: accountResponse.status,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
     }
 
     const accountData = await accountResponse.json();
