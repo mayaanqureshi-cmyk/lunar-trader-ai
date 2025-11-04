@@ -59,11 +59,19 @@ serve(async (req) => {
     for (const position of positions) {
       try {
         const symbol = position.symbol;
-        const qty = parseFloat(position.qty);
+        // Use qty_available to avoid selling shares held in pending orders
+        const qty = parseFloat(position.qty_available || position.qty);
+        const totalQty = parseFloat(position.qty);
         const unrealizedPlpc = parseFloat(position.unrealized_plpc);
         const currentPrice = parseFloat(position.current_price);
 
-        console.log(`Analyzing ${symbol}: P/L ${(unrealizedPlpc * 100).toFixed(2)}%`);
+        console.log(`Analyzing ${symbol}: P/L ${(unrealizedPlpc * 100).toFixed(2)}%, Available: ${qty}/${totalQty}`);
+        
+        // Skip if no shares available to sell
+        if (qty <= 0) {
+          console.log(`⏭️ Skipping ${symbol}: No shares available (${qty} available, ${totalQty} total - likely in pending orders)`);
+          continue;
+        }
 
         // Get technical analysis
         const analysisResponse = await supabase.functions.invoke('analyze-multi-timeframe', {

@@ -405,7 +405,9 @@ Return TOP 5-7 HIGH-PROFIT opportunities. Be aggressive - we want to maximize ga
         const profitPercent = parseFloat(pos.unrealized_plpc) * 100;
         const avgEntry = parseFloat(pos.avg_entry_price);
         const currentPrice = parseFloat(pos.current_price);
-        const qty = parseFloat(pos.qty);
+        // Use qty_available to avoid selling shares held in pending orders
+        const qty = parseFloat(pos.qty_available || pos.qty);
+        const totalQty = parseFloat(pos.qty);
         
         // Get technical data for momentum indicators
         const tech = technicalData.technicalData?.[pos.symbol];
@@ -416,7 +418,13 @@ Return TOP 5-7 HIGH-PROFIT opportunities. Be aggressive - we want to maximize ga
         const peakPrice = Math.max(currentPrice, avgEntry * 1.1); // At least 10% above entry
         const dipFromPeak = ((peakPrice - currentPrice) / peakPrice) * 100;
         
-        console.log(`📊 ${pos.symbol}: Profit ${profitPercent.toFixed(2)}%, Dip ${dipFromPeak.toFixed(2)}%, RSI ${rsi.toFixed(1)}`);
+        console.log(`📊 ${pos.symbol}: Profit ${profitPercent.toFixed(2)}%, Dip ${dipFromPeak.toFixed(2)}%, RSI ${rsi.toFixed(1)}, Available: ${qty}/${totalQty}`);
+        
+        // Skip if no shares available to sell
+        if (qty <= 0) {
+          console.log(`⏭️ Skipping ${pos.symbol}: No shares available (${qty} available, ${totalQty} total - likely in pending orders)`);
+          continue;
+        }
         
         let sellReason = '';
         let sellQty = qty;
@@ -463,8 +471,8 @@ Return TOP 5-7 HIGH-PROFIT opportunities. Be aggressive - we want to maximize ga
             
             if (sellResp.ok) {
               const sellOrder = await sellResp.json();
-              const profitAmount = parseFloat(pos.unrealized_pl) * (sellQty / qty);
-              const freedCapital = parseFloat(pos.market_value) * (sellQty / qty);
+              const profitAmount = parseFloat(pos.unrealized_pl) * (sellQty / totalQty);
+              const freedCapital = parseFloat(pos.market_value) * (sellQty / totalQty);
               
               sellsExecuted.push({
                 symbol: pos.symbol,
@@ -473,7 +481,7 @@ Return TOP 5-7 HIGH-PROFIT opportunities. Be aggressive - we want to maximize ga
                 profitAmount: profitAmount,
                 profitPercent: profitPercent,
                 quantitySold: sellQty,
-                totalQuantity: qty,
+                totalQuantity: totalQty,
                 isPartial: sellQty < qty,
                 freedCapital: freedCapital,
                 exitRSI: rsi,
