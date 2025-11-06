@@ -642,6 +642,79 @@ Return TOP 5-7 HIGH-PROFIT opportunities. Be aggressive - we want to maximize ga
       console.log(`   📊 RSI: ${rsi.toFixed(1)} | Volume: ${(tech.volume_ratio || 1).toFixed(1)}x | Position: ${pricePosition.toFixed(0)}%`);
       console.log(`   🎯 Target: $${takeProfitPrice.toFixed(2)} (+${adjustedTakeProfit}%) | Stop: $${stopLossPrice.toFixed(2)} (-${adjustedStopLoss.toFixed(1)}%)`);
 
+      // ========== PRE-TRADE BACKTESTING VALIDATION ==========
+      console.log(`📊 Running backtest validation for ${rec.symbol}...`);
+      let backtestResult = null;
+      let backtestPassed = false;
+      
+      try {
+        // Calculate dates for 30-day backtest
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - 30);
+        
+        // Create a simple strategy matching our trading logic
+        const { data: strategy } = await supabase
+          .from('backtest_strategies')
+          .insert({
+            name: `Auto-Strategy-${rec.symbol}-${Date.now()}`,
+            description: 'Momentum-based strategy with RSI/Volume filters',
+            buy_condition: adjustedStopLoss.toFixed(2), // Buy on dips
+            sell_condition: adjustedTakeProfit.toFixed(2), // Sell on gains
+            initial_capital: 10000,
+          })
+          .select()
+          .single();
+        
+        if (strategy) {
+          // Run backtest via existing edge function
+          const backtestResponse = await fetch(`${SUPABASE_URL}/functions/v1/run-backtest`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            },
+            body: JSON.stringify({
+              strategyId: strategy.id,
+              symbol: rec.symbol,
+              startDate: startDate.toISOString().split('T')[0],
+              endDate: endDate.toISOString().split('T')[0],
+            }),
+          });
+          
+          if (backtestResponse.ok) {
+            const backtestData = await backtestResponse.json();
+            backtestResult = backtestData.result;
+            
+            // Validation criteria: positive return OR high win rate
+            const returnOk = backtestResult.return_percentage > 0;
+            const winRateOk = backtestResult.win_rate >= 50;
+            const tradesOk = backtestResult.total_trades >= 1; // At least 1 trade in backtest
+            
+            backtestPassed = (returnOk || winRateOk) && tradesOk;
+            
+            console.log(`📈 Backtest Results for ${rec.symbol}:`);
+            console.log(`   Return: ${backtestResult.return_percentage.toFixed(2)}%`);
+            console.log(`   Win Rate: ${backtestResult.win_rate.toFixed(2)}%`);
+            console.log(`   Trades: ${backtestResult.total_trades}`);
+            console.log(`   Max Drawdown: ${backtestResult.max_drawdown.toFixed(2)}%`);
+            console.log(`   ✅ Validation: ${backtestPassed ? 'PASSED' : 'FAILED'}`);
+          } else {
+            console.log(`⚠️ Backtest failed to run for ${rec.symbol}, proceeding with trade`);
+            backtestPassed = true; // Don't block trade if backtest fails
+          }
+        }
+      } catch (backtestError) {
+        console.error(`⚠️ Backtest error for ${rec.symbol}:`, backtestError);
+        backtestPassed = true; // Don't block trade on backtest errors
+      }
+      
+      // Skip trade if backtest failed validation
+      if (!backtestPassed) {
+        console.log(`❌ Skipping ${rec.symbol}: Failed backtest validation`);
+        continue;
+      }
+
       try {
         // Place market order using notional (dollar amount) for fractional shares
         const orderResponse = await fetch('https://paper-api.alpaca.markets/v2/orders', {
@@ -684,6 +757,13 @@ Return TOP 5-7 HIGH-PROFIT opportunities. Be aggressive - we want to maximize ga
             riskReward: rec.riskReward || 'N/A',
             timeframe: rec.timeframe || 'N/A',
             timestamp: new Date().toISOString(),
+            backtestValidation: backtestResult ? {
+              returnPercentage: backtestResult.return_percentage,
+              winRate: backtestResult.win_rate,
+              totalTrades: backtestResult.total_trades,
+              maxDrawdown: backtestResult.max_drawdown,
+              passed: backtestPassed,
+            } : null,
           });
 
           // Update sector exposure

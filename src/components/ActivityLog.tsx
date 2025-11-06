@@ -180,6 +180,49 @@ export const ActivityLog = () => {
                               </div>
                             )}
 
+                            {/* Backtest Validation Results */}
+                            {trade.backtestValidation && (
+                              <div className="p-4 bg-secondary/30 rounded-lg border border-secondary">
+                                <div className="flex items-center gap-2 mb-3">
+                                  <TrendingUp className="h-4 w-4 text-secondary" />
+                                  <p className="text-sm font-bold text-secondary">30-Day Backtest Validation</p>
+                                  <Badge variant={trade.backtestValidation.passed ? "default" : "destructive"} className="ml-auto">
+                                    {trade.backtestValidation.passed ? "✓ PASSED" : "✗ FAILED"}
+                                  </Badge>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Return</p>
+                                    <p className={`text-sm font-semibold ${
+                                      trade.backtestValidation.returnPercentage > 0 ? 'text-green-500' : 'text-red-500'
+                                    }`}>
+                                      {trade.backtestValidation.returnPercentage.toFixed(2)}%
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Win Rate</p>
+                                    <p className={`text-sm font-semibold ${
+                                      trade.backtestValidation.winRate >= 50 ? 'text-green-500' : 'text-yellow-500'
+                                    }`}>
+                                      {trade.backtestValidation.winRate.toFixed(1)}%
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Trades</p>
+                                    <p className="text-sm font-semibold text-foreground">
+                                      {trade.backtestValidation.totalTrades}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Max Drawdown</p>
+                                    <p className="text-sm font-semibold text-red-500">
+                                      -{trade.backtestValidation.maxDrawdown.toFixed(2)}%
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
                             {/* Trade Details */}
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3 bg-secondary/20 rounded-lg">
                               <div>
