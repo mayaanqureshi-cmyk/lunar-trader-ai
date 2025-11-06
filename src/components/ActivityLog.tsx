@@ -170,6 +170,16 @@ export const ActivityLog = () => {
                               </Badge>
                             </div>
 
+                            {/* Rationale - Now prominently displayed first */}
+                            {trade.reasoning && (
+                              <div className="p-4 bg-primary/10 rounded-lg border-l-4 border-primary">
+                                <div className="flex items-start gap-2 mb-2">
+                                  <p className="text-sm font-bold text-primary">Trade Rationale:</p>
+                                </div>
+                                <p className="text-sm text-foreground leading-relaxed">{trade.reasoning}</p>
+                              </div>
+                            )}
+
                             {/* Trade Details */}
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3 bg-secondary/20 rounded-lg">
                               <div>
@@ -190,13 +200,6 @@ export const ActivityLog = () => {
                               </div>
                             </div>
 
-                            {/* Rationale */}
-                            {trade.reasoning && (
-                              <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
-                                <p className="text-xs font-semibold text-primary mb-1">Trade Rationale</p>
-                                <p className="text-sm text-foreground">{trade.reasoning}</p>
-                              </div>
-                            )}
 
                             {/* Technical Indicators */}
                             {trade.technicalIndicators && Object.keys(trade.technicalIndicators).length > 0 && (
