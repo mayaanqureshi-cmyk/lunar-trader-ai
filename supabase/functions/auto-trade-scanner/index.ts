@@ -7,17 +7,43 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// ============= PERFORMANCE OPTIMIZATION: INDICATOR CACHE =============
-// In-memory LRU cache for technical indicators with TTL and price invalidation
+// ============= TYPES & INTERFACES =============
 interface CachedIndicators {
   data: any;
   timestamp: number;
   priceSnapshot: number;
 }
 
+interface TradeRecommendation {
+  symbol: string;
+  recommendation: string;
+  confidence: number;
+  reasoning: string;
+  geminiReasoning?: string;
+  gptReasoning?: string;
+  geminiConfidence?: number;
+  gptConfidence?: number;
+  priceTarget: number;
+  stopLoss: number;
+  technicalScore: number;
+  riskReward: string;
+  aiConsensus: string;
+  technicalIndicators?: any;
+  fundamentals?: any;
+  timeframe?: string;
+}
+
+interface BacktestResult {
+  return_percentage: number;
+  win_rate: number;
+  total_trades: number;
+  max_drawdown: number;
+}
+
+// ============= CACHE MANAGEMENT =============
 const indicatorCache = new Map<string, CachedIndicators>();
-const CACHE_TTL_MS = 60 * 1000; // 1 minute cache
-const PRICE_CHANGE_THRESHOLD = 0.3; // Invalidate if price moves >0.3%
+const CACHE_TTL_MS = 60 * 1000;
+const PRICE_CHANGE_THRESHOLD = 0.3;
 
 const getCachedIndicators = (symbol: string, currentPrice: number): any | null => {
   const cached = indicatorCache.get(symbol);
@@ -26,31 +52,326 @@ const getCachedIndicators = (symbol: string, currentPrice: number): any | null =
   const age = Date.now() - cached.timestamp;
   const priceChange = Math.abs((currentPrice - cached.priceSnapshot) / cached.priceSnapshot) * 100;
   
-  // Cache is valid if: within TTL AND price hasn't moved significantly
   if (age < CACHE_TTL_MS && priceChange < PRICE_CHANGE_THRESHOLD) {
     console.log(`✅ Cache hit: ${symbol} (age: ${(age / 1000).toFixed(1)}s, drift: ${priceChange.toFixed(2)}%)`);
     return cached.data;
   }
-  
   return null;
 };
 
 const setCachedIndicators = (symbol: string, data: any, price: number) => {
-  indicatorCache.set(symbol, {
-    data,
-    timestamp: Date.now(),
-    priceSnapshot: price
-  });
-  
-  // Simple LRU: limit cache size to prevent memory issues
+  indicatorCache.set(symbol, { data, timestamp: Date.now(), priceSnapshot: price });
   if (indicatorCache.size > 200) {
     const oldestKey = indicatorCache.keys().next().value;
-    if (oldestKey) {
-      indicatorCache.delete(oldestKey);
-    }
+    if (oldestKey) indicatorCache.delete(oldestKey);
   }
 };
 
+// ============= CONFIGURATION =============
+const SYMBOLS_TO_SCAN = [
+  'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA', 'TSLA',
+  'AMD', 'INTC', 'QCOM', 'AVGO', 'CRM', 'ORCL', 'ADBE', 'NOW', 'PANW', 'CRWD',
+  'PLTR', 'SNOW', 'DDOG', 'NET', 'ZS', 'MDB',
+  'WMT', 'COST', 'TGT', 'HD', 'NKE', 'SBUX',
+  'JPM', 'BAC', 'WFC', 'GS', 'MS', 'V', 'MA', 'PYPL', 'SQ',
+  'JNJ', 'UNH', 'PFE', 'ABBV', 'LLY', 'TMO', 'MRNA', 'GILD',
+  'XOM', 'CVX', 'COP', 'SLB', 'EOG',
+  'DIS', 'NFLX', 'CMCSA', 'T', 'VZ',
+  'BA', 'CAT', 'GE', 'UPS', 'HON', 'LMT',
+  'RIVN', 'LCID', 'NIO', 'ENPH', 'PLUG',
+  'COIN', 'MSTR', 'RIOT', 'MARA',
+  'SPY', 'QQQ', 'IWM', 'DIA', 'VTI', 'VOO'
+];
+
+const SECTOR_MAP: Record<string, string> = {
+  'AAPL': 'Tech', 'MSFT': 'Tech', 'GOOGL': 'Tech', 'AMZN': 'Tech', 'META': 'Tech', 'NVDA': 'Tech', 'TSLA': 'Auto',
+  'AMD': 'Semiconductors', 'INTC': 'Semiconductors', 'QCOM': 'Semiconductors', 'AVGO': 'Semiconductors',
+  'CRM': 'Software', 'ORCL': 'Software', 'ADBE': 'Software', 'NOW': 'Software', 'PANW': 'Cybersecurity', 'CRWD': 'Cybersecurity',
+  'PLTR': 'AI', 'SNOW': 'Cloud', 'DDOG': 'Cloud', 'NET': 'Cloud', 'ZS': 'Cybersecurity', 'MDB': 'Database',
+  'WMT': 'Retail', 'COST': 'Retail', 'TGT': 'Retail', 'HD': 'Retail', 'NKE': 'Consumer', 'SBUX': 'Consumer',
+  'JPM': 'Finance', 'BAC': 'Finance', 'WFC': 'Finance', 'GS': 'Finance', 'MS': 'Finance', 'V': 'Payments', 'MA': 'Payments', 'PYPL': 'Payments',
+  'JNJ': 'Healthcare', 'UNH': 'Healthcare', 'PFE': 'Pharma', 'ABBV': 'Pharma', 'LLY': 'Pharma', 'TMO': 'Healthcare', 'MRNA': 'Biotech', 'GILD': 'Biotech',
+  'XOM': 'Energy', 'CVX': 'Energy', 'COP': 'Energy', 'SLB': 'Energy', 'EOG': 'Energy',
+  'DIS': 'Media', 'NFLX': 'Media', 'CMCSA': 'Telecom', 'T': 'Telecom', 'VZ': 'Telecom',
+  'BA': 'Aerospace', 'CAT': 'Industrial', 'GE': 'Industrial', 'UPS': 'Transport', 'HON': 'Industrial', 'LMT': 'Defense',
+  'RIVN': 'EV', 'LCID': 'EV', 'NIO': 'EV', 'ENPH': 'CleanEnergy', 'PLUG': 'CleanEnergy',
+  'COIN': 'Crypto', 'MSTR': 'Crypto', 'RIOT': 'Crypto', 'MARA': 'Crypto',
+  'SPY': 'ETF', 'QQQ': 'ETF', 'IWM': 'ETF', 'DIA': 'ETF', 'VTI': 'ETF', 'VOO': 'ETF'
+};
+
+const RISK_CONFIG = {
+  baseStopLossPercent: 3,
+  baseTakeProfitPercent: 8,
+  confidenceThreshold: 0.62,
+  maxSectorExposure: 0.5,
+  capitalDeployment: 0.95
+};
+
+// ============= HELPER FUNCTIONS =============
+async function checkMarketStatus(alpacaKey: string, alpacaSecret: string): Promise<boolean> {
+  const clockResp = await fetch('https://paper-api.alpaca.markets/v2/clock', {
+    headers: { 'APCA-API-KEY-ID': alpacaKey, 'APCA-API-SECRET-KEY': alpacaSecret }
+  });
+  if (!clockResp.ok) throw new Error('Failed to fetch market clock');
+  const clock = await clockResp.json();
+  return clock.is_open;
+}
+
+async function getTechnicalData(
+  supabase: any,
+  symbols: string[],
+  alpacaKey: string,
+  alpacaSecret: string
+): Promise<Record<string, any>> {
+  // Get current prices for cache validation
+  const priceCheckResponse = await fetch(
+    `https://data.alpaca.markets/v2/stocks/snapshots?symbols=${symbols.join(',')}`,
+    { headers: { 'APCA-API-KEY-ID': alpacaKey, 'APCA-API-SECRET-KEY': alpacaSecret } }
+  );
+  const priceData = priceCheckResponse.ok ? await priceCheckResponse.json() : {};
+  
+  // Check cache and identify uncached symbols
+  const uncachedSymbols: string[] = [];
+  const cachedData: Record<string, any> = {};
+  
+  for (const symbol of symbols) {
+    const currentPrice = priceData[symbol]?.latestTrade?.p || 0;
+    if (currentPrice > 0) {
+      const cached = getCachedIndicators(symbol, currentPrice);
+      if (cached) {
+        cachedData[symbol] = { ...cached, close: currentPrice };
+      } else {
+        uncachedSymbols.push(symbol);
+      }
+    } else {
+      uncachedSymbols.push(symbol);
+    }
+  }
+  
+  console.log(`📊 Cache: ${Object.keys(cachedData).length} hit, ${uncachedSymbols.length} miss`);
+  
+  // Fetch fresh data only for uncached symbols
+  if (uncachedSymbols.length > 0) {
+    const { data, error } = await supabase.functions.invoke('analyze-multi-timeframe', {
+      body: { symbols: uncachedSymbols }
+    });
+    if (error) throw new Error(`Technical analysis failed: ${error.message}`);
+    
+    const freshData = data.technicalData || {};
+    for (const [symbol, techData] of Object.entries(freshData)) {
+      setCachedIndicators(symbol, techData, (techData as any).close);
+    }
+    
+    return { ...cachedData, ...freshData };
+  }
+  
+  return cachedData;
+}
+
+async function getAIRecommendations(
+  technicalData: Record<string, any>,
+  lovableApiKey: string
+): Promise<TradeRecommendation[]> {
+  const aiPrompt = `You are an aggressive algorithmic trader focused on MAXIMUM PROFIT. Analyze these stocks and identify the TOP 5-7 stocks with HIGHEST profit potential for TODAY.
+
+TECHNICAL DATA:
+${JSON.stringify({ technicalData }, null, 2)}
+
+Return ONLY a JSON array with 5-7 stocks in this exact format:
+[
+  {
+    "symbol": "NVDA",
+    "recommendation": "BUY",
+    "confidence": 0.85,
+    "reasoning": "Explosive momentum, volume surge 200%, breaking resistance",
+    "priceTarget": 145.50,
+    "stopLoss": 142.00,
+    "technicalScore": 8.5,
+    "riskReward": "1:4"
+  }
+]
+
+CRITERIA: Confidence >62%, Technical score >6/10, prioritize high volume, momentum breakouts, strong trends.`;
+
+  const [geminiResponse, gptResponse] = await Promise.all([
+    fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${lovableApiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          { role: 'system', content: 'You are an elite quantitative trader. Return only valid JSON.' },
+          { role: 'user', content: aiPrompt }
+        ]
+      })
+    }),
+    fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${lovableApiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'openai/gpt-5-mini',
+        messages: [
+          { role: 'system', content: 'You are an elite quantitative trader. Return only valid JSON.' },
+          { role: 'user', content: aiPrompt }
+        ]
+      })
+    })
+  ]);
+
+  if (!geminiResponse.ok || !gptResponse.ok) {
+    throw new Error(`AI analysis failed: Gemini ${geminiResponse.status}, GPT ${gptResponse.status}`);
+  }
+
+  const geminiData = await geminiResponse.json();
+  const gptData = await gptResponse.json();
+
+  const geminiRecs = JSON.parse(geminiData.choices[0].message.content.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+  const gptRecs = JSON.parse(gptData.choices[0].message.content.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+
+  console.log(`🤖 AI: Gemini ${geminiRecs.length}, GPT ${gptRecs.length} recommendations`);
+
+  // Merge recommendations
+  const recMap = new Map<string, TradeRecommendation>();
+  
+  for (const rec of geminiRecs) {
+    if (rec.confidence >= RISK_CONFIG.confidenceThreshold && rec.recommendation === 'BUY') {
+      recMap.set(rec.symbol, {
+        ...rec,
+        geminiConfidence: rec.confidence,
+        gptConfidence: 0,
+        geminiReasoning: rec.reasoning,
+        gptReasoning: '',
+        aiConsensus: 'Gemini Only'
+      });
+    }
+  }
+  
+  for (const rec of gptRecs) {
+    if (rec.confidence >= RISK_CONFIG.confidenceThreshold && rec.recommendation === 'BUY') {
+      const existing = recMap.get(rec.symbol);
+      if (existing) {
+        existing.gptConfidence = rec.confidence;
+        existing.confidence = (existing.geminiConfidence! + rec.confidence) / 2;
+        existing.gptReasoning = rec.reasoning;
+        existing.priceTarget = (existing.priceTarget + rec.priceTarget) / 2;
+        existing.stopLoss = Math.max(existing.stopLoss, rec.stopLoss);
+        existing.technicalScore = (existing.technicalScore + (rec.technicalScore || 0)) / 2;
+        existing.aiConsensus = '🔥 STRONG CONSENSUS';
+      } else {
+        recMap.set(rec.symbol, {
+          ...rec,
+          geminiConfidence: 0,
+          gptConfidence: rec.confidence,
+          geminiReasoning: '',
+          gptReasoning: rec.reasoning,
+          aiConsensus: 'GPT-5 Only'
+        });
+      }
+    }
+  }
+  
+  return Array.from(recMap.values())
+    .sort((a, b) => {
+      const aBonus = a.aiConsensus.includes('CONSENSUS') ? 0.15 : 0;
+      const bBonus = b.aiConsensus.includes('CONSENSUS') ? 0.15 : 0;
+      return (b.confidence + bBonus) - (a.confidence + aBonus);
+    })
+    .slice(0, 15)
+    .map(rec => ({
+      ...rec,
+      reasoning: rec.geminiReasoning && rec.gptReasoning 
+        ? `🤖 Gemini: ${rec.geminiReasoning} | 🤖 GPT: ${rec.gptReasoning}`
+        : rec.geminiReasoning || rec.gptReasoning!,
+      technicalIndicators: technicalData[rec.symbol] || {},
+      fundamentals: { 
+        aiModels: rec.aiConsensus,
+        geminiScore: rec.geminiConfidence, 
+        gptScore: rec.gptConfidence 
+      },
+      timeframe: '1-3 day swing trade'
+    }));
+}
+
+function calculatePositionMultiplier(
+  symbol: string,
+  confidence: number,
+  aiConsensus: string,
+  technicalData: Record<string, any>
+): number {
+  const tech = technicalData[symbol];
+  if (!tech) return 1.0;
+  
+  let multiplier = 1.0;
+  if (aiConsensus.includes('CONSENSUS')) multiplier *= 1.3;
+  if (confidence > 0.80) multiplier *= 1.2;
+  else if (confidence > 0.75) multiplier *= 1.1;
+  
+  const volumeRatio = tech.volume_ratio || 1.0;
+  if (volumeRatio > 2.0) multiplier *= 1.2;
+  else if (volumeRatio > 1.5) multiplier *= 1.1;
+  
+  const volatility = ((tech.high - tech.low) / tech.close) * 100;
+  if (volatility > 8) multiplier *= 0.8;
+  
+  return Math.min(multiplier, 1.5);
+}
+
+async function runBacktestValidation(
+  supabase: any,
+  symbol: string,
+  stopLoss: number,
+  takeProfit: number,
+  supabaseUrl: string,
+  serviceRoleKey: string
+): Promise<{ result: BacktestResult | null; passed: boolean }> {
+  try {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 30);
+    
+    const { data: strategy } = await supabase
+      .from('backtest_strategies')
+      .insert({
+        name: `Auto-Strategy-${symbol}-${Date.now()}`,
+        description: 'Momentum strategy with RSI/Volume filters',
+        buy_condition: stopLoss.toFixed(2),
+        sell_condition: takeProfit.toFixed(2),
+        initial_capital: 10000
+      })
+      .select()
+      .single();
+    
+    if (!strategy) return { result: null, passed: true };
+    
+    const response = await fetch(`${supabaseUrl}/functions/v1/run-backtest`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${serviceRoleKey}`
+      },
+      body: JSON.stringify({
+        strategyId: strategy.id,
+        symbol,
+        startDate: startDate.toISOString().split('T')[0],
+        endDate: endDate.toISOString().split('T')[0]
+      })
+    });
+    
+    if (!response.ok) return { result: null, passed: true };
+    
+    const { result } = await response.json();
+    const passed = (result.return_percentage > 0 || result.win_rate >= 50) && result.total_trades >= 1;
+    
+    console.log(`📈 Backtest ${symbol}: Return ${result.return_percentage.toFixed(2)}%, Win Rate ${result.win_rate.toFixed(2)}%, ${passed ? 'PASSED' : 'FAILED'}`);
+    
+    return { result, passed };
+  } catch (error) {
+    console.error(`⚠️ Backtest error ${symbol}:`, error);
+    return { result: null, passed: true };
+  }
+}
+
+// ============= MAIN HANDLER =============
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -66,7 +387,6 @@ serve(async (req) => {
     const ALPACA_SECRET_KEY = Deno.env.get('ALPACA_SECRET_KEY');
 
     if (!ALPACA_API_KEY || !ALPACA_SECRET_KEY) {
-      console.log('⚠️ Alpaca credentials not configured, skipping trade execution');
       return new Response(JSON.stringify({ success: true, message: 'Credentials not configured' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
@@ -74,289 +394,29 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Get all users with auto-trading enabled
-    const { data: profiles } = await supabase.from('profiles').select('id, email');
-    
-    if (!profiles || profiles.length === 0) {
-      console.log('No users found');
-      return new Response(JSON.stringify({ success: true, message: 'No users' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-
-    // Check real market status via Alpaca clock
-    const clockResp = await fetch('https://paper-api.alpaca.markets/v2/clock', {
-      headers: {
-        'APCA-API-KEY-ID': ALPACA_API_KEY,
-        'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
-      },
-    });
-    if (!clockResp.ok) {
-      throw new Error('Failed to fetch Alpaca market clock');
-    }
-    const clock = await clockResp.json();
-    if (!clock.is_open) {
-      console.log('⏰ Market is closed, skipping');
+    // Check market status
+    const marketOpen = await checkMarketStatus(ALPACA_API_KEY, ALPACA_SECRET_KEY);
+    if (!marketOpen) {
+      console.log('⏰ Market closed');
       return new Response(JSON.stringify({ success: true, message: 'Market closed' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    // Expanded universe of stocks across sectors
-    const symbolsToScan = [
-      // Mega Cap Tech
-      'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA', 'TSLA',
-      // Tech & Semiconductors
-      'AMD', 'INTC', 'QCOM', 'AVGO', 'CRM', 'ORCL', 'ADBE', 'NOW', 'PANW', 'CRWD',
-      // AI & Cloud
-      'PLTR', 'SNOW', 'DDOG', 'NET', 'ZS', 'MDB',
-      // Consumer & Retail
-      'AMZN', 'WMT', 'COST', 'TGT', 'HD', 'NKE', 'SBUX',
-      // Finance
-      'JPM', 'BAC', 'WFC', 'GS', 'MS', 'V', 'MA', 'PYPL', 'SQ',
-      // Healthcare & Biotech
-      'JNJ', 'UNH', 'PFE', 'ABBV', 'LLY', 'TMO', 'MRNA', 'GILD',
-      // Energy
-      'XOM', 'CVX', 'COP', 'SLB', 'EOG',
-      // Communication
-      'DIS', 'NFLX', 'CMCSA', 'T', 'VZ',
-      // Industrials
-      'BA', 'CAT', 'GE', 'UPS', 'HON', 'LMT',
-      // EV & Clean Energy
-      'RIVN', 'LCID', 'NIO', 'ENPH', 'PLUG',
-      // Crypto-Related
-      'COIN', 'MSTR', 'RIOT', 'MARA',
-      // ETFs
-      'SPY', 'QQQ', 'IWM', 'DIA', 'VTI', 'VOO'
-    ];
+    console.log(`📊 Analyzing ${SYMBOLS_TO_SCAN.length} stocks...`);
 
-    console.log(`📊 Analyzing ${symbolsToScan.length} stocks with comprehensive metrics...`);
+    // Get technical data with caching
+    const technicalData = await getTechnicalData(supabase, SYMBOLS_TO_SCAN, ALPACA_API_KEY, ALPACA_SECRET_KEY);
 
-    // Step 1: Get comprehensive technical analysis with intelligent caching
-    console.log('🚀 Fetching technical data with intelligent caching...');
-    
-    // First, do a lightweight price check for cache validation
-    const priceCheckResponse = await fetch(
-      `https://data.alpaca.markets/v2/stocks/snapshots?symbols=${symbolsToScan.join(',')}`,
-      {
-        headers: {
-          'APCA-API-KEY-ID': ALPACA_API_KEY,
-          'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
-        },
-      }
-    );
-    
-    const priceData = priceCheckResponse.ok ? await priceCheckResponse.json() : {};
-    
-    // Batch fetch: Check cache first, only request uncached symbols
-    const uncachedSymbols: string[] = [];
-    const cachedData: Record<string, any> = {};
-    
-    for (const symbol of symbolsToScan) {
-      const currentPrice = priceData[symbol]?.latestTrade?.p || 0;
-      if (currentPrice > 0) {
-        const cached = getCachedIndicators(symbol, currentPrice);
-        if (cached) {
-          cachedData[symbol] = { ...cached, close: currentPrice };
-        } else {
-          uncachedSymbols.push(symbol);
-        }
-      } else {
-        uncachedSymbols.push(symbol);
-      }
-    }
-    
-    console.log(`📊 Cache performance: ${Object.keys(cachedData).length} cached, ${uncachedSymbols.length} need refresh`);
-    
-    // Only fetch technical data for uncached symbols (MASSIVE speedup!)
-    let technicalData: any = { technicalData: cachedData };
-    
-    if (uncachedSymbols.length > 0) {
-      const technicalAnalysis = await supabase.functions.invoke('analyze-multi-timeframe', {
-        body: { symbols: uncachedSymbols }
-      });
 
-      if (technicalAnalysis.error) {
-        throw new Error(`Technical analysis failed: ${technicalAnalysis.error.message}`);
-      }
-
-      const freshData = technicalAnalysis.data.technicalData || {};
-      
-      // Cache the fresh data
-      for (const [symbol, data] of Object.entries(freshData)) {
-        setCachedIndicators(symbol, data, (data as any).close);
-      }
-      
-      // Merge cached + fresh data
-      technicalData.technicalData = { ...cachedData, ...freshData };
-    }
-    
-    console.log(`✅ Technical analysis complete: ${Object.keys(cachedData).length} from cache, ${uncachedSymbols.length} fetched (${Object.keys(cachedData).length > 0 ? ((Object.keys(cachedData).length / symbolsToScan.length) * 100).toFixed(1) : 0}% cache hit rate)`);
-
-    // Step 2: Analyze with multiple AI models - OPTIMIZED FOR MAXIMUM PROFIT
-    const aiPrompt = `You are an aggressive algorithmic trader focused on MAXIMUM PROFIT. Analyze these stocks and identify the TOP 5-7 stocks with HIGHEST profit potential for TODAY.
-
-TECHNICAL DATA:
-${JSON.stringify(technicalData, null, 2)}
-
-Return ONLY a JSON array with 5-7 stocks in this exact format:
-[
-  {
-    "symbol": "NVDA",
-    "recommendation": "BUY",
-    "confidence": 0.85,
-    "reasoning": "Explosive momentum, volume surge 200%, breaking resistance with strong RSI momentum",
-    "priceTarget": 145.50,
-    "stopLoss": 142.00,
-    "technicalScore": 8.5,
-    "riskReward": "1:4"
-  }
-]
-
-AGGRESSIVE CRITERIA FOR MAX PROFIT:
-- Confidence >62% (accept more opportunities)
-- Technical score >6/10 (be more aggressive)
-- Prioritize: High volume, momentum breakouts, strong trends
-- Focus on PROFIT POTENTIAL over safety
-- Look for: Gap ups, volume spikes, momentum surges, breakout patterns
-
-Return TOP 5-7 HIGH-PROFIT opportunities. Be aggressive - we want to maximize gains!`;
-
-    // Query Gemini 2.5 Flash
-    const geminiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: 'You are an elite quantitative trader specializing in technical analysis. Return only valid JSON.' },
-          { role: 'user', content: aiPrompt }
-        ],
-      }),
-    });
-
-    // Query GPT-5 Mini
-    const gptResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'openai/gpt-5-mini',
-        messages: [
-          { role: 'system', content: 'You are an elite quantitative trader specializing in multi-timeframe analysis. Return only valid JSON.' },
-          { role: 'user', content: aiPrompt }
-        ],
-      }),
-    });
-
-    if (!geminiResponse.ok || !gptResponse.ok) {
-      throw new Error(`AI analysis failed: Gemini ${geminiResponse.status}, GPT ${gptResponse.status}`);
-    }
-
-    const geminiData = await geminiResponse.json();
-    const gptData = await gptResponse.json();
-
-    // Parse both AI responses
-    let geminiAnalysis = geminiData.choices[0].message.content.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    let gptAnalysis = gptData.choices[0].message.content.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    
-    const geminiRecs = JSON.parse(geminiAnalysis);
-    const gptRecs = JSON.parse(gptAnalysis);
-
-    console.log(`🤖 Gemini recommended: ${geminiRecs.length} stocks`);
-    console.log(`🤖 GPT-5 Mini recommended: ${gptRecs.length} stocks`);
-
-    // Step 3: Combine recommendations - AGGRESSIVE MODE (accept 62%+ confidence)
-    const recommendationMap = new Map();
-    
-    // Add all Gemini recommendations with lower threshold
-    for (const rec of geminiRecs) {
-      if (rec.confidence >= 0.62 && rec.recommendation === 'BUY') {
-        recommendationMap.set(rec.symbol, {
-          symbol: rec.symbol,
-          recommendation: 'BUY',
-          geminiConfidence: rec.confidence,
-          gptConfidence: 0,
-          confidence: rec.confidence,
-          geminiReasoning: rec.reasoning,
-          gptReasoning: '',
-          priceTarget: rec.priceTarget,
-          stopLoss: rec.stopLoss,
-          technicalScore: rec.technicalScore || 0,
-          riskReward: rec.riskReward,
-          aiConsensus: 'Gemini Only'
-        });
-      }
-    }
-    
-    // Add/merge GPT recommendations with lower threshold
-    for (const rec of gptRecs) {
-      if (rec.confidence >= 0.62 && rec.recommendation === 'BUY') {
-        const existing = recommendationMap.get(rec.symbol);
-        if (existing) {
-          // Both AIs recommend - upgrade to consensus
-          existing.gptConfidence = rec.confidence;
-          existing.confidence = (existing.geminiConfidence + rec.confidence) / 2;
-          existing.gptReasoning = rec.reasoning;
-          existing.priceTarget = (existing.priceTarget + rec.priceTarget) / 2;
-          existing.stopLoss = Math.max(existing.stopLoss, rec.stopLoss);
-          existing.technicalScore = (existing.technicalScore + (rec.technicalScore || 0)) / 2;
-          existing.aiConsensus = '🔥 STRONG CONSENSUS - Both AIs Agree';
-        } else {
-          // GPT only recommendation
-          recommendationMap.set(rec.symbol, {
-            symbol: rec.symbol,
-            recommendation: 'BUY',
-            geminiConfidence: 0,
-            gptConfidence: rec.confidence,
-            confidence: rec.confidence,
-            geminiReasoning: '',
-            gptReasoning: rec.reasoning,
-            priceTarget: rec.priceTarget,
-            stopLoss: rec.stopLoss,
-            technicalScore: rec.technicalScore || 0,
-            riskReward: rec.riskReward,
-            aiConsensus: 'GPT-5 Only'
-          });
-        }
-      }
-    }
-    
-    // Convert to array and sort - PRIORITIZE HIGH-CONVICTION TRADES
-    const recommendations = Array.from(recommendationMap.values())
-      .sort((a, b) => {
-        // Prioritize consensus trades with momentum bonus
-        const aBonus = a.aiConsensus.includes('CONSENSUS') ? 0.15 : 0;
-        const bBonus = b.aiConsensus.includes('CONSENSUS') ? 0.15 : 0;
-        return (b.confidence + bBonus) - (a.confidence + aBonus);
-      })
-      .slice(0, 15) // Top 15 for maximum opportunities
-      .map(rec => ({
-        ...rec,
-        reasoning: rec.geminiReasoning && rec.gptReasoning 
-          ? `🤖 Gemini: ${rec.geminiReasoning} | 🤖 GPT-5: ${rec.gptReasoning}`
-          : rec.geminiReasoning || rec.gptReasoning,
-        technicalIndicators: technicalData.technicalData?.[rec.symbol] || {},
-        fundamentals: { 
-          aiModels: rec.aiConsensus,
-          geminiScore: rec.geminiConfidence, 
-          gptScore: rec.gptConfidence 
-        },
-        timeframe: '1-3 day swing trade'
-      }));
-
-    console.log(`✅ Combined AI Analysis: ${recommendations.length} stocks (${recommendations.filter(r => r.aiConsensus.includes('CONSENSUS')).length} with consensus)`);
+    // Get AI recommendations
+    const recommendations = await getAIRecommendations(technicalData, LOVABLE_API_KEY);
 
     console.log(`✅ AI Recommendations: ${recommendations.length} stocks`);
 
     if (!Array.isArray(recommendations) || recommendations.length === 0) {
       console.log('No trading opportunities found');
-      return new Response(JSON.stringify({ success: true, message: 'No opportunities', analyzed: symbolsToScan.length }), {
+      return new Response(JSON.stringify({ success: true, message: 'No opportunities', analyzed: SYMBOLS_TO_SCAN.length }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
@@ -784,7 +844,7 @@ Return TOP 5-7 HIGH-PROFIT opportunities. Be aggressive - we want to maximize ga
     // Log to database
     try {
       await supabase.from('auto_trade_logs').insert({
-        scanned: symbolsToScan.length,
+        scanned: SYMBOLS_TO_SCAN.length,
         recommendations: recommendations.length,
         trades_executed: tradesExecuted.length,
         trades_data: tradesExecuted,
@@ -796,7 +856,7 @@ Return TOP 5-7 HIGH-PROFIT opportunities. Be aggressive - we want to maximize ga
     return new Response(
       JSON.stringify({
         success: true,
-        scanned: symbolsToScan.length,
+        scanned: SYMBOLS_TO_SCAN.length,
         recommendations: recommendations.length,
         sellsExecuted: sellsExecuted.length,
         sells: sellsExecuted,
