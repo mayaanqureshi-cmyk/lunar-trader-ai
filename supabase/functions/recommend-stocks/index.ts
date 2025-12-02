@@ -11,9 +11,9 @@ serve(async (req) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY not configured");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY not configured");
     }
 
     const prompt = `As a quantitative analyst specializing in INSTITUTIONAL POSITIONING and HEDGE FUND ACTIVITY, recommend 3-5 stocks for each timeframe. Focus on stocks with STRONG QUANT SIGNALS + HEDGE FUND ACCUMULATION:
@@ -74,14 +74,14 @@ For each stock provide:
 - Recommendation reason: MUST include specific quant metrics + hedge fund activity (e.g., "5 major funds added $2B in Q4 2024, Sharpe ratio 1.8, trading at 0.6x PEG vs sector 1.5x")
 - Risk level (low/medium/high - based on volatility, beta, drawdown risk)`;
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",

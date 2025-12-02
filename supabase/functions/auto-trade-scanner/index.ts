@@ -170,7 +170,7 @@ async function getTechnicalData(
 
 async function getAIRecommendations(
   technicalData: Record<string, any>,
-  lovableApiKey: string
+  openaiApiKey: string
 ): Promise<TradeRecommendation[]> {
   const aiPrompt = `You are an aggressive algorithmic trader focused on MAXIMUM PROFIT. Analyze these stocks and identify the TOP 5-7 stocks with HIGHEST profit potential for TODAY.
 
@@ -193,23 +193,23 @@ Return ONLY a JSON array with 5-7 stocks in this exact format:
 
 CRITERIA: Confidence >62%, Technical score >6/10, prioritize high volume, momentum breakouts, strong trends.`;
 
-  const [geminiResponse, gptResponse] = await Promise.all([
-    fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+  const [gpt4Response, gptMiniResponse] = await Promise.all([
+    fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${lovableApiKey}`, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': `Bearer ${openaiApiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: 'gpt-4o',
         messages: [
           { role: 'system', content: 'You are an elite quantitative trader. Return only valid JSON.' },
           { role: 'user', content: aiPrompt }
         ]
       })
     }),
-    fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${lovableApiKey}`, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': `Bearer ${openaiApiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'openai/gpt-5-mini',
+        model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: 'You are an elite quantitative trader. Return only valid JSON.' },
           { role: 'user', content: aiPrompt }
@@ -218,22 +218,22 @@ CRITERIA: Confidence >62%, Technical score >6/10, prioritize high volume, moment
     })
   ]);
 
-  if (!geminiResponse.ok || !gptResponse.ok) {
-    throw new Error(`AI analysis failed: Gemini ${geminiResponse.status}, GPT ${gptResponse.status}`);
+  if (!gpt4Response.ok || !gptMiniResponse.ok) {
+    throw new Error(`AI analysis failed: GPT-4o ${gpt4Response.status}, GPT-4o-mini ${gptMiniResponse.status}`);
   }
 
-  const geminiData = await geminiResponse.json();
-  const gptData = await gptResponse.json();
+  const gpt4Data = await gpt4Response.json();
+  const gptMiniData = await gptMiniResponse.json();
 
-  const geminiRecs = JSON.parse(geminiData.choices[0].message.content.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
-  const gptRecs = JSON.parse(gptData.choices[0].message.content.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+  const gpt4Recs = JSON.parse(gpt4Data.choices[0].message.content.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+  const gptMiniRecs = JSON.parse(gptMiniData.choices[0].message.content.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
 
-  console.log(`🤖 AI: Gemini ${geminiRecs.length}, GPT ${gptRecs.length} recommendations`);
+  console.log(`🤖 AI: GPT-4o ${gpt4Recs.length}, GPT-4o-mini ${gptMiniRecs.length} recommendations`);
 
   // Merge recommendations
   const recMap = new Map<string, TradeRecommendation>();
   
-  for (const rec of geminiRecs) {
+  for (const rec of gpt4Recs) {
     if (rec.confidence >= RISK_CONFIG.confidenceThreshold && rec.recommendation === 'BUY') {
       recMap.set(rec.symbol, {
         ...rec,
@@ -241,12 +241,12 @@ CRITERIA: Confidence >62%, Technical score >6/10, prioritize high volume, moment
         gptConfidence: 0,
         geminiReasoning: rec.reasoning,
         gptReasoning: '',
-        aiConsensus: 'Gemini Only'
+        aiConsensus: 'GPT-4o Only'
       });
     }
   }
   
-  for (const rec of gptRecs) {
+  for (const rec of gptMiniRecs) {
     if (rec.confidence >= RISK_CONFIG.confidenceThreshold && rec.recommendation === 'BUY') {
       const existing = recMap.get(rec.symbol);
       if (existing) {
@@ -264,7 +264,7 @@ CRITERIA: Confidence >62%, Technical score >6/10, prioritize high volume, moment
           gptConfidence: rec.confidence,
           geminiReasoning: '',
           gptReasoning: rec.reasoning,
-          aiConsensus: 'GPT-5 Only'
+          aiConsensus: 'GPT-4o-mini Only'
         });
       }
     }
@@ -382,7 +382,7 @@ serve(async (req) => {
 
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')!;
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')!;
     const ALPACA_API_KEY = Deno.env.get('ALPACA_API_KEY');
     const ALPACA_SECRET_KEY = Deno.env.get('ALPACA_SECRET_KEY');
 
@@ -410,7 +410,7 @@ serve(async (req) => {
 
 
     // Get AI recommendations
-    const recommendations = await getAIRecommendations(technicalData, LOVABLE_API_KEY);
+    const recommendations = await getAIRecommendations(technicalData, OPENAI_API_KEY);
 
     console.log(`✅ AI Recommendations: ${recommendations.length} stocks`);
 
