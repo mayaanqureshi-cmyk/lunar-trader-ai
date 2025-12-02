@@ -172,10 +172,18 @@ async function getAIRecommendations(
   technicalData: Record<string, any>,
   openaiApiKey: string
 ): Promise<TradeRecommendation[]> {
-  const aiPrompt = `You are an aggressive algorithmic trader focused on MAXIMUM PROFIT. Analyze these stocks and identify the TOP 5-7 stocks with HIGHEST profit potential for TODAY.
+  const aiPrompt = `You are an elite algorithmic trader using ICT (Inner Circle Trader) methodology combined with institutional analysis. Analyze these stocks for HIGH-PROBABILITY setups.
 
 TECHNICAL DATA:
 ${JSON.stringify({ technicalData }, null, 2)}
+
+ICT TRADING CRITERIA TO EVALUATE:
+1. ORDER BLOCKS (OB): Identify the last bullish/bearish candle before a significant move. Look for price returning to these zones.
+2. FAIR VALUE GAPS (FVG): Price inefficiencies where candles don't overlap. Price often returns to fill these gaps.
+3. LIQUIDITY SWEEPS: Has price swept above recent highs/below recent lows to grab stops before reversing?
+4. MARKET STRUCTURE: Is there a Break of Structure (BOS) or Change of Character (CHoCH)?
+5. KILL ZONES: Prioritize trades during NY Open (8:30-11:30 AM ET) and London Open (2-5 AM ET).
+6. PREMIUM/DISCOUNT: Is price in premium (overbought) or discount (oversold) zone relative to recent range?
 
 Return ONLY a JSON array with 5-7 stocks in this exact format:
 [
@@ -183,15 +191,21 @@ Return ONLY a JSON array with 5-7 stocks in this exact format:
     "symbol": "NVDA",
     "recommendation": "BUY",
     "confidence": 0.85,
-    "reasoning": "Explosive momentum, volume surge 200%, breaking resistance",
+    "reasoning": "Bullish Order Block at $140, FVG filled, Break of Structure confirmed with higher high",
     "priceTarget": 145.50,
-    "stopLoss": 142.00,
+    "stopLoss": 138.00,
     "technicalScore": 8.5,
-    "riskReward": "1:4"
+    "riskReward": "1:3",
+    "ictSetup": "Order Block + FVG confluence"
   }
 ]
 
-CRITERIA: Confidence >62%, Technical score >6/10, prioritize high volume, momentum breakouts, strong trends.`;
+CRITERIA: 
+- Confidence >62%
+- Technical score >6/10
+- Prioritize ICT setups: Order Blocks at key levels, FVG fills, liquidity sweeps followed by reversals
+- Look for confluence: Multiple ICT concepts aligning = higher probability
+- Strong trends with clear market structure`;
 
   const [gpt4Response, gptMiniResponse] = await Promise.all([
     fetch('https://api.openai.com/v1/chat/completions', {
@@ -200,7 +214,7 @@ CRITERIA: Confidence >62%, Technical score >6/10, prioritize high volume, moment
       body: JSON.stringify({
         model: 'gpt-4o',
         messages: [
-          { role: 'system', content: 'You are an elite quantitative trader. Return only valid JSON.' },
+          { role: 'system', content: 'You are an expert ICT (Inner Circle Trader) and Smart Money Concepts trader. Analyze charts for Order Blocks, Fair Value Gaps, Liquidity Sweeps, and Market Structure. Return only valid JSON.' },
           { role: 'user', content: aiPrompt }
         ]
       })
@@ -211,7 +225,7 @@ CRITERIA: Confidence >62%, Technical score >6/10, prioritize high volume, moment
       body: JSON.stringify({
         model: 'gpt-4o-mini',
         messages: [
-          { role: 'system', content: 'You are an elite quantitative trader. Return only valid JSON.' },
+          { role: 'system', content: 'You are an expert ICT (Inner Circle Trader) and Smart Money Concepts trader. Analyze charts for Order Blocks, Fair Value Gaps, Liquidity Sweeps, and Market Structure. Return only valid JSON.' },
           { role: 'user', content: aiPrompt }
         ]
       })
