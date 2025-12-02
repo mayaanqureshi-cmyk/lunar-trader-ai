@@ -4,10 +4,11 @@ import { AlpacaAutoTrading } from "@/components/AlpacaAutoTrading";
 import { ActivityLog } from "@/components/ActivityLog";
 import { AutoTradePortfolio } from "@/components/AutoTradePortfolio";
 import { MonitoringStats } from "@/components/MonitoringStats";
+import { PaperTradingDashboard } from "@/components/PaperTradingDashboard";
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Bot, Zap, Activity, Wallet } from "lucide-react";
+import { Bot, Zap, Activity, Wallet, FileText, BarChart3 } from "lucide-react";
 import { useTradeNotifications } from "@/hooks/useTradeNotifications";
 
 
@@ -51,32 +52,36 @@ const Index = () => {
         </div>
 
         {/* Main Features */}
-        <Tabs defaultValue="portfolio" className="w-full">
-          <TabsList className="grid w-full grid-cols-4 mb-6 bg-card/50 backdrop-blur">
+        <Tabs defaultValue="paper-trading" className="w-full">
+          <TabsList className="grid w-full grid-cols-5 mb-6 bg-card/50 backdrop-blur">
+            <TabsTrigger value="paper-trading" className="data-[state=active]:bg-primary/10">
+              <FileText className="h-4 w-4 mr-2" />
+              Paper Trading
+            </TabsTrigger>
             <TabsTrigger value="portfolio" className="data-[state=active]:bg-primary/10">
               <Wallet className="h-4 w-4 mr-2" />
-              Portfolio
-            </TabsTrigger>
-            <TabsTrigger value="activity" className="data-[state=active]:bg-primary/10">
-              <Activity className="h-4 w-4 mr-2" />
-              Activity Log
+              Live Portfolio
             </TabsTrigger>
             <TabsTrigger value="auto-trade" className="data-[state=active]:bg-primary/10">
               <Zap className="h-4 w-4 mr-2" />
               Auto-Trade
             </TabsTrigger>
             <TabsTrigger value="technical" className="data-[state=active]:bg-primary/10">
-              <Activity className="h-4 w-4 mr-2" />
+              <BarChart3 className="h-4 w-4 mr-2" />
               Technical
+            </TabsTrigger>
+            <TabsTrigger value="activity" className="data-[state=active]:bg-primary/10">
+              <Activity className="h-4 w-4 mr-2" />
+              Activity Log
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="portfolio" className="animate-in fade-in duration-500">
-            <AutoTradePortfolio />
+          <TabsContent value="paper-trading" className="animate-in fade-in duration-500">
+            <PaperTradingDashboard />
           </TabsContent>
 
-          <TabsContent value="activity" className="animate-in fade-in duration-500">
-            <ActivityLog />
+          <TabsContent value="portfolio" className="animate-in fade-in duration-500">
+            <AutoTradePortfolio />
           </TabsContent>
 
           <TabsContent value="auto-trade" className="animate-in fade-in duration-500">
@@ -88,6 +93,10 @@ const Index = () => {
 
           <TabsContent value="technical" className="animate-in fade-in duration-500">
             <TechnicalAnalysis />
+          </TabsContent>
+
+          <TabsContent value="activity" className="animate-in fade-in duration-500">
+            <ActivityLog />
           </TabsContent>
         </Tabs>
       </div>
