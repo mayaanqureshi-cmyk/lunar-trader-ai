@@ -322,7 +322,7 @@ export type Database = {
           created_at: string | null
           error_message: string | null
           id: string
-          ip_address: unknown | null
+          ip_address: unknown
           order_id: string | null
           order_type: string | null
           price: number | null
@@ -337,7 +337,7 @@ export type Database = {
           created_at?: string | null
           error_message?: string | null
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           order_id?: string | null
           order_type?: string | null
           price?: number | null
@@ -352,7 +352,7 @@ export type Database = {
           created_at?: string | null
           error_message?: string | null
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           order_id?: string | null
           order_type?: string | null
           price?: number | null
