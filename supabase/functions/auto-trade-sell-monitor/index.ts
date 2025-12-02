@@ -16,11 +16,11 @@ serve(async (req) => {
 
     const ALPACA_API_KEY = Deno.env.get('ALPACA_API_KEY');
     const ALPACA_SECRET_KEY = Deno.env.get('ALPACA_SECRET_KEY');
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-    if (!ALPACA_API_KEY || !ALPACA_SECRET_KEY || !LOVABLE_API_KEY) {
+    if (!ALPACA_API_KEY || !ALPACA_SECRET_KEY || !OPENAI_API_KEY) {
       throw new Error('Missing required API keys');
     }
 
@@ -111,15 +111,15 @@ Respond with JSON:
 
         // Query both AI models
         const aiPromises = [
-          // Gemini
-          fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+          // GPT-4o
+          fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+              'Authorization': `Bearer ${OPENAI_API_KEY}`,
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              model: 'google/gemini-2.5-flash',
+              model: 'gpt-4o',
               messages: [
                 { role: 'system', content: 'You are an expert day trader specializing in exit strategies. Respond ONLY with valid JSON.' },
                 { role: 'user', content: aiPrompt }
@@ -127,15 +127,15 @@ Respond with JSON:
               temperature: 0.7,
             }),
           }),
-          // GPT-5 Mini
-          fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+          // GPT-4o-mini
+          fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+              'Authorization': `Bearer ${OPENAI_API_KEY}`,
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              model: 'openai/gpt-5-mini',
+              model: 'gpt-4o-mini',
               messages: [
                 { role: 'system', content: 'You are an expert day trader specializing in exit strategies. Respond ONLY with valid JSON.' },
                 { role: 'user', content: aiPrompt }
@@ -147,26 +147,26 @@ Respond with JSON:
         const aiResponses = await Promise.all(aiPromises);
         const aiResults = await Promise.all(aiResponses.map(r => r.json()));
 
-        const geminiRec = JSON.parse(aiResults[0].choices[0].message.content.replace(/```json\n?|\n?```/g, '').trim());
-        const gptRec = JSON.parse(aiResults[1].choices[0].message.content.replace(/```json\n?|\n?```/g, '').trim());
+        const gpt4Rec = JSON.parse(aiResults[0].choices[0].message.content.replace(/```json\n?|\n?```/g, '').trim());
+        const gptMiniRec = JSON.parse(aiResults[1].choices[0].message.content.replace(/```json\n?|\n?```/g, '').trim());
 
-        console.log(`${symbol} - Gemini: ${geminiRec.action} (${geminiRec.confidence}), GPT: ${gptRec.action} (${gptRec.confidence})`);
+        console.log(`${symbol} - GPT-4o: ${gpt4Rec.action} (${gpt4Rec.confidence}), GPT-4o-mini: ${gptMiniRec.action} (${gptMiniRec.confidence})`);
 
         // Decide if we should sell
-        const bothSaysSell = geminiRec.action === 'sell' && gptRec.action === 'sell';
-        const avgConfidence = (geminiRec.confidence + gptRec.confidence) / 2;
-        const highConfidenceSell = (geminiRec.action === 'sell' && geminiRec.confidence >= 0.75) || 
-                                    (gptRec.action === 'sell' && gptRec.confidence >= 0.75);
+        const bothSaysSell = gpt4Rec.action === 'sell' && gptMiniRec.action === 'sell';
+        const avgConfidence = (gpt4Rec.confidence + gptMiniRec.confidence) / 2;
+        const highConfidenceSell = (gpt4Rec.action === 'sell' && gpt4Rec.confidence >= 0.75) || 
+                                    (gptMiniRec.action === 'sell' && gptMiniRec.confidence >= 0.75);
 
         if (bothSaysSell || highConfidenceSell) {
           sellDecisions.push({
             symbol,
             qty,
             confidence: avgConfidence,
-            reasoning: `🤖 Gemini: ${geminiRec.reasoning} | 🤖 GPT: ${gptRec.reasoning}`,
-            urgency: geminiRec.urgency === 'high' || gptRec.urgency === 'high' ? 'high' : 'medium',
+            reasoning: `🤖 GPT-4o: ${gpt4Rec.reasoning} | 🤖 GPT-4o-mini: ${gptMiniRec.reasoning}`,
+            urgency: gpt4Rec.urgency === 'high' || gptMiniRec.urgency === 'high' ? 'high' : 'medium',
             unrealizedPl: unrealizedPlpc,
-            aiModels: bothSaysSell ? 'Both AIs Agree' : (geminiRec.confidence > gptRec.confidence ? 'Gemini' : 'GPT-5')
+            aiModels: bothSaysSell ? 'Both AIs Agree' : (gpt4Rec.confidence > gptMiniRec.confidence ? 'GPT-4o' : 'GPT-4o-mini')
           });
         }
 
