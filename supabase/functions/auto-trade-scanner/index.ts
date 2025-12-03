@@ -108,13 +108,44 @@ const RISK_CONFIG = {
 };
 
 // ============= HELPER FUNCTIONS =============
-async function checkMarketStatus(alpacaKey: string, alpacaSecret: string): Promise<boolean> {
+function isLondonKillZone(): { active: boolean; session: string } {
+  const now = new Date();
+  const utcHour = now.getUTCHours();
+  const utcMinute = now.getUTCMinutes();
+  const timeInMinutes = utcHour * 60 + utcMinute;
+  
+  // London Kill Zone: 7:00-10:00 UTC (2-5 AM ET during EST, 3-6 AM ET during EDT)
+  // This is the London Open session
+  const londonStart = 7 * 60; // 7:00 UTC
+  const londonEnd = 10 * 60;  // 10:00 UTC
+  
+  if (timeInMinutes >= londonStart && timeInMinutes <= londonEnd) {
+    return { active: true, session: 'LONDON' };
+  }
+  
+  return { active: false, session: '' };
+}
+
+async function checkMarketStatus(alpacaKey: string, alpacaSecret: string): Promise<{ open: boolean; session: string }> {
+  // Check London Kill Zone first
+  const london = isLondonKillZone();
+  if (london.active) {
+    console.log('🇬🇧 London Kill Zone active (7:00-10:00 UTC)');
+    return { open: true, session: 'LONDON' };
+  }
+  
+  // Check US market
   const clockResp = await fetch('https://paper-api.alpaca.markets/v2/clock', {
     headers: { 'APCA-API-KEY-ID': alpacaKey, 'APCA-API-SECRET-KEY': alpacaSecret }
   });
   if (!clockResp.ok) throw new Error('Failed to fetch market clock');
   const clock = await clockResp.json();
-  return clock.is_open;
+  
+  if (clock.is_open) {
+    return { open: true, session: 'US' };
+  }
+  
+  return { open: false, session: '' };
 }
 
 async function getTechnicalData(
@@ -408,16 +439,17 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Check market status
-    const marketOpen = await checkMarketStatus(ALPACA_API_KEY, ALPACA_SECRET_KEY);
-    if (!marketOpen) {
-      console.log('⏰ Market closed');
-      return new Response(JSON.stringify({ success: true, message: 'Market closed' }), {
+    // Check market status (US or London)
+    const marketStatus = await checkMarketStatus(ALPACA_API_KEY, ALPACA_SECRET_KEY);
+    if (!marketStatus.open) {
+      console.log('⏰ Market closed (neither US nor London session)');
+      return new Response(JSON.stringify({ success: true, message: 'Market closed - no active session' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    console.log(`📊 Analyzing ${SYMBOLS_TO_SCAN.length} stocks...`);
+    console.log(`📊 Analyzing ${SYMBOLS_TO_SCAN.length} stocks... (Session: ${marketStatus.session})`);
+
 
     // Get technical data with caching
     const technicalData = await getTechnicalData(supabase, SYMBOLS_TO_SCAN, ALPACA_API_KEY, ALPACA_SECRET_KEY);
