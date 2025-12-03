@@ -721,27 +721,14 @@ export const PaperTradingDashboard = () => {
                     const startDate = new Date();
                     startDate.setDate(startDate.getDate() - daysInput);
 
-                    // First create a strategy
-                    const { data: strategy, error: strategyError } = await supabase
-                      .from('backtest_strategies')
-                      .insert({
-                        name: `Test-${symbolInput}-${Date.now()}`,
-                        description: 'Manual backtest',
-                        buy_condition: buyThreshold,
-                        sell_condition: sellThreshold,
-                        initial_capital: STARTING_CAPITAL
-                      })
-                      .select()
-                      .single();
-
-                    if (strategyError) throw strategyError;
-
                     const { data, error } = await supabase.functions.invoke('run-backtest', {
                       body: {
-                        strategyId: strategy.id,
                         symbol: symbolInput,
                         startDate: startDate.toISOString().split('T')[0],
-                        endDate: endDate.toISOString().split('T')[0]
+                        endDate: endDate.toISOString().split('T')[0],
+                        buyThreshold,
+                        sellThreshold,
+                        initialCapital: STARTING_CAPITAL
                       }
                     });
 
