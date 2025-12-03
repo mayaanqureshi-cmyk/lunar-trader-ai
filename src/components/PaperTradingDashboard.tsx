@@ -381,10 +381,11 @@ export const PaperTradingDashboard = () => {
 
       {/* Main Content Tabs */}
       <Tabs defaultValue="positions" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4 bg-card/50">
+        <TabsList className="grid w-full grid-cols-5 bg-card/50">
           <TabsTrigger value="positions">Positions</TabsTrigger>
           <TabsTrigger value="ict-signals">ICT Signals</TabsTrigger>
           <TabsTrigger value="trade">Trade</TabsTrigger>
+          <TabsTrigger value="test">Test Strategy</TabsTrigger>
           <TabsTrigger value="history">History</TabsTrigger>
         </TabsList>
 
@@ -648,6 +649,213 @@ export const PaperTradingDashboard = () => {
                       Sell
                     </Button>
                   </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Test Strategy Tab */}
+        <TabsContent value="test" className="space-y-4">
+          <div className="grid md:grid-cols-2 gap-4">
+            {/* Test Scanner Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Zap className="h-5 w-5 text-yellow-500" />
+                  Test Scanner
+                </CardTitle>
+                <CardDescription>
+                  Run the ICT scanner anytime (bypasses market hours)
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="p-4 bg-warning/10 border border-warning/20 rounded-lg">
+                  <p className="text-sm text-muted-foreground">
+                    This will analyze 75+ stocks using ICT methodology and show AI recommendations without executing trades.
+                  </p>
+                </div>
+                <Button 
+                  className="w-full" 
+                  onClick={async () => {
+                    setIsLoading(true);
+                    try {
+                      const { data, error } = await supabase.functions.invoke('auto-trade-scanner', {
+                        body: { testMode: true, analysisOnly: true }
+                      });
+                      if (error) throw error;
+                      toast({
+                        title: "Scanner Complete",
+                        description: `Analyzed ${data.analyzed || 75} stocks. ${data.recommendations?.length || 0} opportunities found.`
+                      });
+                      console.log('Scanner results:', data);
+                    } catch (err) {
+                      toast({
+                        title: "Scanner Error",
+                        description: err instanceof Error ? err.message : "Failed to run scanner",
+                        variant: "destructive"
+                      });
+                    } finally {
+                      setIsLoading(false);
+                    }
+                  }}
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Scanning...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="h-4 w-4 mr-2" />
+                      Run Test Scan
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Backtest Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5 text-primary" />
+                  Historical Backtest
+                </CardTitle>
+                <CardDescription>
+                  Test strategy against historical data
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Symbol</Label>
+                    <Input 
+                      placeholder="SPY" 
+                      id="backtest-symbol"
+                      defaultValue="SPY"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Days Back</Label>
+                    <Input 
+                      type="number" 
+                      id="backtest-days"
+                      defaultValue="30"
+                      min="7"
+                      max="365"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Buy Threshold %</Label>
+                    <Input 
+                      type="number" 
+                      id="backtest-buy"
+                      defaultValue="2"
+                      step="0.5"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Sell Threshold %</Label>
+                    <Input 
+                      type="number" 
+                      id="backtest-sell"
+                      defaultValue="3"
+                      step="0.5"
+                    />
+                  </div>
+                </div>
+                <Button 
+                  className="w-full" 
+                  variant="outline"
+                  onClick={async () => {
+                    setIsLoading(true);
+                    try {
+                      const symbolInput = (document.getElementById('backtest-symbol') as HTMLInputElement)?.value || 'SPY';
+                      const daysInput = parseInt((document.getElementById('backtest-days') as HTMLInputElement)?.value || '30');
+                      const buyThreshold = (document.getElementById('backtest-buy') as HTMLInputElement)?.value || '2';
+                      const sellThreshold = (document.getElementById('backtest-sell') as HTMLInputElement)?.value || '3';
+
+                      const endDate = new Date();
+                      const startDate = new Date();
+                      startDate.setDate(startDate.getDate() - daysInput);
+
+                      // First create a strategy
+                      const { data: strategy, error: strategyError } = await supabase
+                        .from('backtest_strategies')
+                        .insert({
+                          name: `Test-${symbolInput}-${Date.now()}`,
+                          description: 'Manual backtest',
+                          buy_condition: buyThreshold,
+                          sell_condition: sellThreshold,
+                          initial_capital: STARTING_CAPITAL
+                        })
+                        .select()
+                        .single();
+
+                      if (strategyError) throw strategyError;
+
+                      const { data, error } = await supabase.functions.invoke('run-backtest', {
+                        body: {
+                          strategyId: strategy.id,
+                          symbol: symbolInput,
+                          startDate: startDate.toISOString().split('T')[0],
+                          endDate: endDate.toISOString().split('T')[0]
+                        }
+                      });
+
+                      if (error) throw error;
+
+                      const result = data.result;
+                      toast({
+                        title: `Backtest Complete: ${symbolInput}`,
+                        description: `Return: ${result.return_percentage?.toFixed(2) || 0}% | Win Rate: ${result.win_rate?.toFixed(1) || 0}% | Trades: ${result.total_trades || 0}`
+                      });
+                      console.log('Backtest results:', result);
+                    } catch (err) {
+                      toast({
+                        title: "Backtest Error",
+                        description: err instanceof Error ? err.message : "Failed to run backtest",
+                        variant: "destructive"
+                      });
+                    } finally {
+                      setIsLoading(false);
+                    }
+                  }}
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Running...
+                    </>
+                  ) : (
+                    <>
+                      <BarChart3 className="h-4 w-4 mr-2" />
+                      Run Backtest
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Tips Card */}
+          <Card className="bg-primary/5 border-primary/20">
+            <CardContent className="pt-6">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-primary mt-0.5" />
+                <div>
+                  <h4 className="font-semibold mb-1">Testing Tips</h4>
+                  <ul className="text-sm text-muted-foreground space-y-1">
+                    <li>• <strong>Test Scanner</strong>: Runs ICT analysis on 75+ stocks. Check console for detailed recommendations.</li>
+                    <li>• <strong>Backtest</strong>: Uses buy threshold = dip %, sell threshold = gain % (e.g., buy on 2% dip, sell on 3% gain).</li>
+                    <li>• Win rate above 50% with positive returns indicates a potentially profitable strategy.</li>
+                    <li>• Test multiple symbols (SPY, QQQ, NVDA) to validate strategy across markets.</li>
+                  </ul>
                 </div>
               </div>
             </CardContent>
