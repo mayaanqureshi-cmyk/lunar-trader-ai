@@ -114,24 +114,27 @@ function isLondonKillZone(): { active: boolean; session: string } {
   const utcMinute = now.getUTCMinutes();
   const timeInMinutes = utcHour * 60 + utcMinute;
   
-  // London Kill Zone: 7:00-10:00 UTC (2-5 AM ET during EST, 3-6 AM ET during EDT)
-  // This is the London Open session
-  const londonStart = 7 * 60; // 7:00 UTC
-  const londonEnd = 10 * 60;  // 10:00 UTC
+  // Extended London Session: 6:00-14:00 UTC (1-9 AM ET during EST, 2-10 AM ET during EDT)
+  // Covers: Pre-London → London Open → London/NY Overlap
+  const londonStart = 6 * 60;  // 6:00 UTC (1 AM ET)
+  const londonEnd = 14 * 60;   // 14:00 UTC (9 AM ET) - overlaps with NY open
   
   if (timeInMinutes >= londonStart && timeInMinutes <= londonEnd) {
-    return { active: true, session: 'LONDON' };
+    // Distinguish between sessions for logging
+    if (timeInMinutes < 7 * 60) return { active: true, session: 'LONDON_PRE' };
+    if (timeInMinutes < 10 * 60) return { active: true, session: 'LONDON_OPEN' };
+    return { active: true, session: 'LONDON_NY_OVERLAP' };
   }
   
   return { active: false, session: '' };
 }
 
 async function checkMarketStatus(alpacaKey: string, alpacaSecret: string): Promise<{ open: boolean; session: string }> {
-  // Check London Kill Zone first
+  // Check Extended London Session first
   const london = isLondonKillZone();
   if (london.active) {
-    console.log('🇬🇧 London Kill Zone active (7:00-10:00 UTC)');
-    return { open: true, session: 'LONDON' };
+    console.log(`🇬🇧 London Session active: ${london.session} (6:00-14:00 UTC)`);
+    return { open: true, session: london.session };
   }
   
   // Check US market
