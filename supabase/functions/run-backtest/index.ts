@@ -66,10 +66,23 @@ serve(async (req) => {
       throw new Error(`Insufficient historical data for ${symbol}. Try a different date range or symbol.`);
     }
 
+    // ADVANCED EXIT STRATEGY PARAMETERS
+    const STOP_LOSS_PCT = 3;           // Cut losses at -3%
+    const TAKE_PROFIT_PCT = 12;        // Take profits at +12%
+    const TRAILING_TRIGGER_PCT = 8;    // Start trailing after +8% profit
+    const TRAILING_STOP_PCT = 3;       // Trail by 3% from peak
+    const PROFIT_LOCK_TRIGGER = 10;    // If profit exceeds 10%...
+    const PROFIT_LOCK_DIP = 4;         // ...sell if it dips 4% from peak
+
+    console.log(`Advanced Exit Strategy: SL=${STOP_LOSS_PCT}%, TP=${TAKE_PROFIT_PCT}%, Trail@${TRAILING_TRIGGER_PCT}%`);
+
     // Run backtest simulation
     let capital = strategy.initial_capital;
     let position = 0;
-    let trades = [];
+    let entryPrice = 0;
+    let peakPrice = 0;
+    let peakProfit = 0;
+    let trades: any[] = [];
     let winningTrades = 0;
     let losingTrades = 0;
     let maxCapital = capital;
@@ -80,12 +93,77 @@ serve(async (req) => {
       const previousPrice = prices.close[i - 1];
       const priceChange = ((currentPrice - previousPrice) / previousPrice) * 100;
 
-      // Simple buy condition: price drops by threshold
+      if (position > 0) {
+        // Track peak price for trailing stop
+        if (currentPrice > peakPrice) {
+          peakPrice = currentPrice;
+        }
+
+        const currentProfit = ((currentPrice - entryPrice) / entryPrice) * 100;
+        const profitFromPeak = ((currentPrice - peakPrice) / peakPrice) * 100;
+        
+        // Track peak profit for profit lock rule
+        if (currentProfit > peakProfit) {
+          peakProfit = currentProfit;
+        }
+
+        let shouldSell = false;
+        let exitReason = '';
+
+        // EXIT RULE 1: Stop Loss - cut losses quickly
+        if (currentProfit <= -STOP_LOSS_PCT) {
+          shouldSell = true;
+          exitReason = `Stop Loss (${currentProfit.toFixed(1)}%)`;
+        }
+        // EXIT RULE 2: Take Profit - lock in big gains
+        else if (currentProfit >= TAKE_PROFIT_PCT) {
+          shouldSell = true;
+          exitReason = `Take Profit (${currentProfit.toFixed(1)}%)`;
+        }
+        // EXIT RULE 3: Profit Lock - if profit was >10% and now dipping 4% from peak
+        else if (peakProfit >= PROFIT_LOCK_TRIGGER && profitFromPeak <= -PROFIT_LOCK_DIP) {
+          shouldSell = true;
+          exitReason = `Profit Lock (Peak: ${peakProfit.toFixed(1)}%, Now: ${currentProfit.toFixed(1)}%)`;
+        }
+        // EXIT RULE 4: Trailing Stop - if in profit territory and drops from peak
+        else if (currentProfit >= TRAILING_TRIGGER_PCT && profitFromPeak <= -TRAILING_STOP_PCT) {
+          shouldSell = true;
+          exitReason = `Trailing Stop (${currentProfit.toFixed(1)}%)`;
+        }
+
+        if (shouldSell) {
+          const sellValue = position * currentPrice;
+          const profitLoss = sellValue - (position * entryPrice);
+          capital += sellValue;
+          
+          if (profitLoss > 0) winningTrades++;
+          else losingTrades++;
+
+          trades.push({
+            action: 'sell',
+            price: currentPrice,
+            shares: position,
+            profitLoss,
+            profitPct: currentProfit,
+            exitReason,
+            date: new Date(timestamps[i] * 1000),
+          });
+          
+          position = 0;
+          entryPrice = 0;
+          peakPrice = 0;
+          peakProfit = 0;
+        }
+      }
+
+      // BUY CONDITION: Price dips by threshold (momentum entry)
       if (position === 0 && priceChange <= -parseFloat(strategy.buy_condition)) {
-        // Buy signal
         const sharesToBuy = Math.floor(capital / currentPrice);
         if (sharesToBuy > 0) {
           position = sharesToBuy;
+          entryPrice = currentPrice;
+          peakPrice = currentPrice;
+          peakProfit = 0;
           capital -= sharesToBuy * currentPrice;
           trades.push({
             action: 'buy',
@@ -95,29 +173,8 @@ serve(async (req) => {
           });
         }
       }
-      // Simple sell condition: price gains by threshold
-      else if (position > 0 && priceChange >= parseFloat(strategy.sell_condition)) {
-        // Sell signal
-        const sellValue = position * currentPrice;
-        const buyPrice = trades[trades.length - 1].price;
-        const profitLoss: number = sellValue - (position * buyPrice);
-        capital += sellValue;
-        
-        if (profitLoss > 0) winningTrades++;
-        else losingTrades++;
 
-        trades.push({
-          action: 'sell',
-          price: currentPrice,
-          shares: position,
-          profitLoss,
-          date: new Date(timestamps[i] * 1000),
-        });
-        
-        position = 0;
-      }
-
-      // Track max drawdown
+      // Track max portfolio drawdown
       const currentValue = capital + (position * currentPrice);
       if (currentValue > maxCapital) {
         maxCapital = currentValue;
@@ -132,8 +189,8 @@ serve(async (req) => {
     if (position > 0) {
       const finalPrice = prices.close[prices.close.length - 1];
       const sellValue = position * finalPrice;
-      const buyPrice = trades[trades.length - 1].price;
-      const profitLoss: number = sellValue - (position * buyPrice);
+      const currentProfit = ((finalPrice - entryPrice) / entryPrice) * 100;
+      const profitLoss = sellValue - (position * entryPrice);
       capital += sellValue;
       
       if (profitLoss > 0) winningTrades++;
@@ -144,6 +201,8 @@ serve(async (req) => {
         price: finalPrice,
         shares: position,
         profitLoss,
+        profitPct: currentProfit,
+        exitReason: 'End of Period',
         date: new Date(timestamps[timestamps.length - 1] * 1000),
       });
     }
