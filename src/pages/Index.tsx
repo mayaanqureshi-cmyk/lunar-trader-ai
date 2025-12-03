@@ -5,10 +5,11 @@ import { ActivityLog } from "@/components/ActivityLog";
 import { AutoTradePortfolio } from "@/components/AutoTradePortfolio";
 import { MonitoringStats } from "@/components/MonitoringStats";
 import { PaperTradingDashboard } from "@/components/PaperTradingDashboard";
+import { PerformanceAnalytics } from "@/components/PerformanceAnalytics";
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Bot, Zap, Activity, Wallet, FileText, BarChart3 } from "lucide-react";
+import { Bot, Zap, Activity, Wallet, FileText, BarChart3, TrendingUp } from "lucide-react";
 import { useTradeNotifications } from "@/hooks/useTradeNotifications";
 
 
@@ -53,10 +54,14 @@ const Index = () => {
 
         {/* Main Features */}
         <Tabs defaultValue="paper-trading" className="w-full">
-          <TabsList className="grid w-full grid-cols-5 mb-6 bg-card/50 backdrop-blur">
+          <TabsList className="grid w-full grid-cols-6 mb-6 bg-card/50 backdrop-blur">
             <TabsTrigger value="paper-trading" className="data-[state=active]:bg-primary/10">
               <FileText className="h-4 w-4 mr-2" />
               Paper Trading
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className="data-[state=active]:bg-primary/10">
+              <TrendingUp className="h-4 w-4 mr-2" />
+              Analytics
             </TabsTrigger>
             <TabsTrigger value="portfolio" className="data-[state=active]:bg-primary/10">
               <Wallet className="h-4 w-4 mr-2" />
@@ -78,6 +83,10 @@ const Index = () => {
 
           <TabsContent value="paper-trading" className="animate-in fade-in duration-500">
             <PaperTradingDashboard />
+          </TabsContent>
+
+          <TabsContent value="analytics" className="animate-in fade-in duration-500">
+            <PerformanceAnalytics />
           </TabsContent>
 
           <TabsContent value="portfolio" className="animate-in fade-in duration-500">
