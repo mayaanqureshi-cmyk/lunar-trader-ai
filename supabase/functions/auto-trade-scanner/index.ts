@@ -423,7 +423,16 @@ serve(async (req) => {
   }
 
   try {
-    console.log('🤖 Auto-trade scanner running...');
+    // Parse request body for test mode
+    let testMode = false;
+    let analysisOnly = false;
+    try {
+      const body = await req.json();
+      testMode = body?.testMode === true;
+      analysisOnly = body?.analysisOnly === true;
+    } catch { /* no body */ }
+
+    console.log(`🤖 Auto-trade scanner running... ${testMode ? '(TEST MODE)' : ''}`);
 
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -439,16 +448,19 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Check market status (US or London)
-    const marketStatus = await checkMarketStatus(ALPACA_API_KEY, ALPACA_SECRET_KEY);
-    if (!marketStatus.open) {
-      console.log('⏰ Market closed (neither US nor London session)');
-      return new Response(JSON.stringify({ success: true, message: 'Market closed - no active session' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+    // Check market status (US or London) - skip in test mode
+    if (!testMode) {
+      const marketStatus = await checkMarketStatus(ALPACA_API_KEY, ALPACA_SECRET_KEY);
+      if (!marketStatus.open) {
+        console.log('⏰ Market closed (neither US nor London session)');
+        return new Response(JSON.stringify({ success: true, message: 'Market closed - no active session' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      console.log(`📊 Analyzing ${SYMBOLS_TO_SCAN.length} stocks... (Session: ${marketStatus.session})`);
+    } else {
+      console.log(`🧪 TEST MODE: Bypassing market hours, analyzing ${SYMBOLS_TO_SCAN.length} stocks...`);
     }
-
-    console.log(`📊 Analyzing ${SYMBOLS_TO_SCAN.length} stocks... (Session: ${marketStatus.session})`);
 
 
     // Get technical data with caching
