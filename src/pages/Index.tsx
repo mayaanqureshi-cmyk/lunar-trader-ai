@@ -8,107 +8,103 @@ import { PaperTradingDashboard } from "@/components/PaperTradingDashboard";
 import { PerformanceAnalytics } from "@/components/PerformanceAnalytics";
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { Bot, Zap, Activity, Wallet, FileText, BarChart3, TrendingUp } from "lucide-react";
 import { useTradeNotifications } from "@/hooks/useTradeNotifications";
-
 
 const Index = () => {
   const [isAutoTradingEnabled, setIsAutoTradingEnabled] = useState(false);
   const [maxPositionSize, setMaxPositionSize] = useState(100);
 
-  // Enable real-time trade notifications
   useTradeNotifications();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-secondary/5 to-background">
+    <div className="min-h-screen bg-background scanlines">
       <Header />
       
-      {/* Hero Section */}
-      <div className="border-b border-border/50 bg-gradient-to-br from-primary/5 via-secondary/10 to-background backdrop-blur-sm">
-        <div className="container mx-auto px-6 py-16">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="p-3 bg-primary/10 rounded-xl">
-              <Bot className="h-12 w-12 text-primary" />
-            </div>
+      {/* Hero */}
+      <div className="border-b-2 border-border">
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex items-end gap-6">
             <div>
-              <h1 className="text-5xl md:text-6xl font-bold text-foreground tracking-tight">
-                AI Trading Bot
+              <p className="text-label mb-2">SYSTEM//ACTIVE</p>
+              <h1 className="text-display text-foreground">
+                TRADE<span className="text-primary">BOT</span>
               </h1>
-              <Badge variant="secondary" className="mt-2">
-                Goal: $2,000/month
-              </Badge>
+            </div>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="status-dot active" />
+              <span className="text-label">LIVE</span>
             </div>
           </div>
-          <p className="text-xl text-muted-foreground max-w-2xl">
-            Algorithmic trading powered by AI. Backtest strategies, paper trade, and get real-time recommendations.
+          <p className="text-muted-foreground mt-4 max-w-xl text-sm">
+            AI-POWERED ALGORITHMIC TRADING // BACKTEST // PAPER TRADE // EXECUTE
           </p>
         </div>
       </div>
 
-      <div className="container mx-auto px-6 py-8 space-y-8">
-        {/* Monitoring Stats */}
-        <div className="animate-in fade-in-from-bottom-4 duration-300">
-          <MonitoringStats />
-        </div>
+      <div className="container mx-auto px-4 py-6 space-y-6">
+        {/* Stats Grid */}
+        <MonitoringStats />
 
-        {/* Main Features */}
+        {/* Main Tabs */}
         <Tabs defaultValue="paper-trading" className="w-full">
-          <TabsList className="grid w-full grid-cols-6 mb-6 bg-card/50 backdrop-blur">
-            <TabsTrigger value="paper-trading" className="data-[state=active]:bg-primary/10">
-              <FileText className="h-4 w-4 mr-2" />
-              Paper Trading
-            </TabsTrigger>
-            <TabsTrigger value="analytics" className="data-[state=active]:bg-primary/10">
-              <TrendingUp className="h-4 w-4 mr-2" />
-              Analytics
-            </TabsTrigger>
-            <TabsTrigger value="portfolio" className="data-[state=active]:bg-primary/10">
-              <Wallet className="h-4 w-4 mr-2" />
-              Live Portfolio
-            </TabsTrigger>
-            <TabsTrigger value="auto-trade" className="data-[state=active]:bg-primary/10">
-              <Zap className="h-4 w-4 mr-2" />
-              Auto-Trade
-            </TabsTrigger>
-            <TabsTrigger value="technical" className="data-[state=active]:bg-primary/10">
-              <BarChart3 className="h-4 w-4 mr-2" />
-              Technical
-            </TabsTrigger>
-            <TabsTrigger value="activity" className="data-[state=active]:bg-primary/10">
-              <Activity className="h-4 w-4 mr-2" />
-              Activity Log
-            </TabsTrigger>
+          <TabsList className="w-full grid grid-cols-6 bg-card border-2 border-border p-0 h-auto">
+            {[
+              { value: "paper-trading", label: "PAPER" },
+              { value: "analytics", label: "ANALYTICS" },
+              { value: "portfolio", label: "PORTFOLIO" },
+              { value: "auto-trade", label: "AUTO" },
+              { value: "technical", label: "TECHNICAL" },
+              { value: "activity", label: "LOG" },
+            ].map((tab) => (
+              <TabsTrigger
+                key={tab.value}
+                value={tab.value}
+                className="py-3 text-xs font-bold tracking-wider border-r-2 border-border last:border-r-0 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+              >
+                {tab.label}
+              </TabsTrigger>
+            ))}
           </TabsList>
 
-          <TabsContent value="paper-trading" className="animate-in fade-in duration-500">
-            <PaperTradingDashboard />
-          </TabsContent>
+          <div className="mt-6">
+            <TabsContent value="paper-trading">
+              <PaperTradingDashboard />
+            </TabsContent>
 
-          <TabsContent value="analytics" className="animate-in fade-in duration-500">
-            <PerformanceAnalytics />
-          </TabsContent>
+            <TabsContent value="analytics">
+              <PerformanceAnalytics />
+            </TabsContent>
 
-          <TabsContent value="portfolio" className="animate-in fade-in duration-500">
-            <AutoTradePortfolio />
-          </TabsContent>
+            <TabsContent value="portfolio">
+              <AutoTradePortfolio />
+            </TabsContent>
 
-          <TabsContent value="auto-trade" className="animate-in fade-in duration-500">
-            <AlpacaAutoTrading 
-              onAutoTradingChange={setIsAutoTradingEnabled}
-              onMaxPositionSizeChange={setMaxPositionSize}
-            />
-          </TabsContent>
+            <TabsContent value="auto-trade">
+              <AlpacaAutoTrading 
+                onAutoTradingChange={setIsAutoTradingEnabled}
+                onMaxPositionSizeChange={setMaxPositionSize}
+              />
+            </TabsContent>
 
-          <TabsContent value="technical" className="animate-in fade-in duration-500">
-            <TechnicalAnalysis />
-          </TabsContent>
+            <TabsContent value="technical">
+              <TechnicalAnalysis />
+            </TabsContent>
 
-          <TabsContent value="activity" className="animate-in fade-in duration-500">
-            <ActivityLog />
-          </TabsContent>
+            <TabsContent value="activity">
+              <ActivityLog />
+            </TabsContent>
+          </div>
         </Tabs>
       </div>
+
+      {/* Footer */}
+      <footer className="border-t-2 border-border mt-12">
+        <div className="container mx-auto px-4 py-4">
+          <p className="text-label text-center">
+            TRADEBOT V2.0 // {new Date().getFullYear()}
+          </p>
+        </div>
+      </footer>
     </div>
   );
 };
