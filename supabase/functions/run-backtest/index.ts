@@ -71,8 +71,6 @@ serve(async (req) => {
     const TAKE_PROFIT_PCT = 12;        // Take profits at +12%
     const TRAILING_TRIGGER_PCT = 8;    // Start trailing after +8% profit
     const TRAILING_STOP_PCT = 3;       // Trail by 3% from peak
-    const PROFIT_LOCK_TRIGGER = 10;    // If profit exceeds 10%...
-    const PROFIT_LOCK_DIP = 4;         // ...sell if it dips 4% from peak
 
     console.log(`Advanced Exit Strategy: SL=${STOP_LOSS_PCT}%, TP=${TAKE_PROFIT_PCT}%, Trail@${TRAILING_TRIGGER_PCT}%`);
 
@@ -81,7 +79,6 @@ serve(async (req) => {
     let position = 0;
     let entryPrice = 0;
     let peakPrice = 0;
-    let peakProfit = 0;
     let trades: any[] = [];
     let winningTrades = 0;
     let losingTrades = 0;
@@ -101,11 +98,6 @@ serve(async (req) => {
 
         const currentProfit = ((currentPrice - entryPrice) / entryPrice) * 100;
         const profitFromPeak = ((currentPrice - peakPrice) / peakPrice) * 100;
-        
-        // Track peak profit for profit lock rule
-        if (currentProfit > peakProfit) {
-          peakProfit = currentProfit;
-        }
 
         let shouldSell = false;
         let exitReason = '';
@@ -120,12 +112,7 @@ serve(async (req) => {
           shouldSell = true;
           exitReason = `Take Profit (${currentProfit.toFixed(1)}%)`;
         }
-        // EXIT RULE 3: Profit Lock - if profit was >10% and now dipping 4% from peak
-        else if (peakProfit >= PROFIT_LOCK_TRIGGER && profitFromPeak <= -PROFIT_LOCK_DIP) {
-          shouldSell = true;
-          exitReason = `Profit Lock (Peak: ${peakProfit.toFixed(1)}%, Now: ${currentProfit.toFixed(1)}%)`;
-        }
-        // EXIT RULE 4: Trailing Stop - if in profit territory and drops from peak
+        // EXIT RULE 3: Trailing Stop - if in profit territory and drops from peak
         else if (currentProfit >= TRAILING_TRIGGER_PCT && profitFromPeak <= -TRAILING_STOP_PCT) {
           shouldSell = true;
           exitReason = `Trailing Stop (${currentProfit.toFixed(1)}%)`;
@@ -152,7 +139,6 @@ serve(async (req) => {
           position = 0;
           entryPrice = 0;
           peakPrice = 0;
-          peakProfit = 0;
         }
       }
 
@@ -163,7 +149,6 @@ serve(async (req) => {
           position = sharesToBuy;
           entryPrice = currentPrice;
           peakPrice = currentPrice;
-          peakProfit = 0;
           capital -= sharesToBuy * currentPrice;
           trades.push({
             action: 'buy',
