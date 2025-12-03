@@ -12,22 +12,31 @@ serve(async (req) => {
   }
 
   try {
-    const { strategyId, symbol, startDate, endDate } = await req.json();
+    const { symbol, startDate, endDate, buyThreshold, sellThreshold, initialCapital } = await req.json();
     
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Fetch strategy
+    // Create strategy internally (bypasses RLS with service role)
     const { data: strategy, error: strategyError } = await supabase
       .from("backtest_strategies")
-      .select("*")
-      .eq("id", strategyId)
+      .insert({
+        name: `Backtest-${symbol}-${Date.now()}`,
+        description: 'Auto-generated backtest',
+        buy_condition: buyThreshold || '2',
+        sell_condition: sellThreshold || '3',
+        initial_capital: initialCapital || 10000
+      })
+      .select()
       .single();
 
     if (strategyError || !strategy) {
-      throw new Error("Strategy not found");
+      console.error("Strategy creation error:", strategyError);
+      throw new Error("Failed to create strategy");
     }
+    
+    console.log(`Running backtest for ${symbol} from ${startDate} to ${endDate}`);
 
     // Fetch historical data from Yahoo Finance
     const startTimestamp = Math.floor(new Date(startDate).getTime() / 1000);
@@ -138,7 +147,7 @@ serve(async (req) => {
     const { data: result, error: resultError } = await supabase
       .from("backtest_results")
       .insert({
-        strategy_id: strategyId,
+        strategy_id: strategy.id,
         symbol,
         start_date: startDate,
         end_date: endDate,
