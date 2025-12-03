@@ -99,12 +99,19 @@ const SECTOR_MAP: Record<string, string> = {
   'SPY': 'ETF', 'QQQ': 'ETF', 'IWM': 'ETF', 'DIA': 'ETF', 'VTI': 'ETF', 'VOO': 'ETF'
 };
 
+// ============= STRICTER RISK CONFIGURATION =============
+// Reduced trading frequency for higher quality trades
 const RISK_CONFIG = {
-  baseStopLossPercent: 3,
-  baseTakeProfitPercent: 8,
-  confidenceThreshold: 0.62,
-  maxSectorExposure: 0.5,
-  capitalDeployment: 0.95
+  baseStopLossPercent: 4,        // Wider stops to avoid premature exits
+  baseTakeProfitPercent: 10,     // Higher profit targets
+  confidenceThreshold: 0.75,     // RAISED from 0.62 - only high confidence trades
+  minTechnicalScore: 7.5,        // Minimum technical score required
+  maxSectorExposure: 0.4,        // Tighter sector limits
+  capitalDeployment: 0.80,       // Conservative capital deployment
+  requireConsensus: true,        // REQUIRE both AI models to agree
+  maxPositions: 4,               // LIMIT total positions
+  minRiskRewardRatio: 2.5,       // Minimum risk/reward ratio
+  cooldownMinutes: 60,           // Minimum time between trades for same symbol
 };
 
 // ============= HELPER FUNCTIONS =============
@@ -688,22 +695,63 @@ serve(async (req) => {
       return Math.min(multiplier, 2.0);
     };
     
-    // AGGRESSIVE: Take more positions with higher capital allocation
-    const maxTrades = buyingPower < 500 ? 10 : buyingPower < 1000 ? 8 : 7;
-    const baseAmountPerTrade = (buyingPower * 0.95) / maxTrades; // Use 95% of capital
+    // CONSERVATIVE: Fewer, higher-quality positions
+    const maxTrades = Math.min(RISK_CONFIG.maxPositions, 4);
+    const existingPositionCount = currentPositions.length;
+    const availableSlots = Math.max(0, maxTrades - existingPositionCount);
+    const baseAmountPerTrade = (buyingPower * RISK_CONFIG.capitalDeployment) / Math.max(availableSlots, 1);
 
-    console.log(`🚀 AGGRESSIVE MODE: $${baseAmountPerTrade.toFixed(2)} base per position, max ${maxTrades} trades (95% capital deployment)`);
+    console.log(`🎯 QUALITY MODE: $${baseAmountPerTrade.toFixed(2)} per position, ${availableSlots} slots available (max ${maxTrades} total positions)`);
+
+    if (availableSlots <= 0) {
+      console.log(`⚠️ Already at max positions (${existingPositionCount}/${maxTrades}), no new trades`);
+      return new Response(JSON.stringify({ 
+        success: true, 
+        message: 'Max positions reached',
+        analyzed: SYMBOLS_TO_SCAN.length,
+        currentPositions: existingPositionCount,
+        maxPositions: maxTrades
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
 
     const tradesExecuted = [];
     let tradesPlaced = 0;
 
-    for (const rec of recommendations) {
-      if (tradesPlaced >= maxTrades) {
-        console.log(`⚠️ Max trades reached (${maxTrades})`);
+    // Filter recommendations STRICTLY
+    const qualifiedRecs = recommendations.filter(rec => {
+      // 1. Must be a BUY recommendation
+      if (rec.recommendation !== 'BUY') return false;
+      
+      // 2. HIGH confidence threshold (75%+)
+      if (rec.confidence < RISK_CONFIG.confidenceThreshold) {
+        console.log(`⏭️ ${rec.symbol}: Confidence ${(rec.confidence * 100).toFixed(0)}% < ${RISK_CONFIG.confidenceThreshold * 100}% threshold`);
+        return false;
+      }
+      
+      // 3. REQUIRE AI consensus (both models must agree)
+      if (RISK_CONFIG.requireConsensus && !rec.aiConsensus?.includes('CONSENSUS')) {
+        console.log(`⏭️ ${rec.symbol}: No AI consensus (${rec.aiConsensus})`);
+        return false;
+      }
+      
+      // 4. Minimum technical score
+      if (rec.technicalScore < RISK_CONFIG.minTechnicalScore) {
+        console.log(`⏭️ ${rec.symbol}: Technical score ${rec.technicalScore.toFixed(1)} < ${RISK_CONFIG.minTechnicalScore} threshold`);
+        return false;
+      }
+      
+      return true;
+    });
+
+    console.log(`📋 Qualified recommendations: ${qualifiedRecs.length}/${recommendations.length} passed strict filters`);
+
+    for (const rec of qualifiedRecs) {
+      if (tradesPlaced >= availableSlots) {
+        console.log(`⚠️ All available slots filled (${tradesPlaced}/${availableSlots})`);
         break;
       }
-
-      if (rec.confidence < 0.62 || rec.recommendation !== 'BUY') continue; // Aggressive 62% threshold
 
       // Check if we already have this position
       if (currentPositions.some((p: any) => p.symbol === rec.symbol)) {
@@ -711,13 +759,13 @@ serve(async (req) => {
         continue;
       }
 
-      // Sector diversification check (relaxed for max profit)
+      // STRICT Sector diversification check
       const sector = sectorMap[rec.symbol] || 'Other';
       const currentSectorValue = sectorExposure[sector] || 0;
-      const sectorLimit = portfolioValue * 0.5; // Max 50% per sector (aggressive)
+      const sectorLimit = portfolioValue * RISK_CONFIG.maxSectorExposure;
       
       if (currentSectorValue >= sectorLimit) {
-        console.log(`⚠️ Sector limit reached for ${sector}, skipping ${rec.symbol}`);
+        console.log(`⚠️ Sector limit reached for ${sector} (${((currentSectorValue/portfolioValue)*100).toFixed(1)}% > ${RISK_CONFIG.maxSectorExposure*100}%), skipping ${rec.symbol}`);
         continue;
       }
 
@@ -732,23 +780,44 @@ serve(async (req) => {
       const high = tech.high;
       const low = tech.low;
       const rsi = tech.rsi || 50;
+      const macd = tech.macd || 0;
+      const macdSignal = tech.macd_signal || 0;
+      const volumeRatio = tech.volume_ratio || 1;
       
-      // AGGRESSIVE ENTRY: Ride momentum, don't fear peaks
+      // STRICT ENTRY FILTERS - Quality over quantity
       const pricePosition = ((currentPrice - low) / (high - low)) * 100;
       
-      // Only avoid extreme peaks during breakouts
-      if (pricePosition > 95 && rsi > 75) {
-        console.log(`⚠️ ${rec.symbol} extremely overbought, waiting briefly`);
+      // 1. RSI must be in favorable range (not overbought)
+      if (rsi > 70) {
+        console.log(`⏭️ ${rec.symbol}: RSI overbought (${rsi.toFixed(1)} > 70)`);
         continue;
       }
       
-      // Accept higher RSI for strong momentum trades
-      if (rsi > 80 && tech.volume_ratio < 1.5) {
-        console.log(`⚠️ ${rec.symbol} overbought without volume, skipping`);
+      // 2. RSI should not be extremely oversold (potential falling knife)
+      if (rsi < 25) {
+        console.log(`⏭️ ${rec.symbol}: RSI extremely oversold (${rsi.toFixed(1)} < 25) - potential falling knife`);
         continue;
       }
       
-      // MOMENTUM & CONFIDENCE-ADJUSTED POSITION SIZING (AGGRESSIVE)
+      // 3. MACD should be bullish or crossing bullish
+      if (macd < macdSignal && macd < 0) {
+        console.log(`⏭️ ${rec.symbol}: MACD bearish (MACD: ${macd.toFixed(2)} < Signal: ${macdSignal.toFixed(2)})`);
+        continue;
+      }
+      
+      // 4. Volume confirmation required (at least average volume)
+      if (volumeRatio < 0.8) {
+        console.log(`⏭️ ${rec.symbol}: Low volume (${volumeRatio.toFixed(2)}x < 0.8x average)`);
+        continue;
+      }
+      
+      // 5. Don't chase extreme moves - avoid buying at very top of range
+      if (pricePosition > 90) {
+        console.log(`⏭️ ${rec.symbol}: Near top of range (${pricePosition.toFixed(0)}% > 90%)`);
+        continue;
+      }
+      
+      // CONSERVATIVE POSITION SIZING - quality over quantity
       const positionMultiplier = calculatePositionMultiplier(rec.symbol, rec.confidence, rec.aiConsensus);
       const adjustedAmount = Math.min(
         baseAmountPerTrade * positionMultiplier,
@@ -763,20 +832,27 @@ serve(async (req) => {
 
       // DYNAMIC STOP-LOSS based on volatility
       const volatilityPercent = ((high - low) / currentPrice) * 100;
-      const adjustedStopLoss = Math.max(baseStopLossPercent, volatilityPercent * 0.5);
-      const adjustedTakeProfit = baseTakeProfitPercent;
+      const adjustedStopLoss = Math.max(RISK_CONFIG.baseStopLossPercent, volatilityPercent * 0.6);
+      const adjustedTakeProfit = RISK_CONFIG.baseTakeProfitPercent;
+      
+      // CHECK RISK/REWARD RATIO - must meet minimum
+      const riskRewardRatio = adjustedTakeProfit / adjustedStopLoss;
+      if (riskRewardRatio < RISK_CONFIG.minRiskRewardRatio) {
+        console.log(`⏭️ ${rec.symbol}: Poor risk/reward (${riskRewardRatio.toFixed(2)} < ${RISK_CONFIG.minRiskRewardRatio})`);
+        continue;
+      }
       
       const stopLossPrice = currentPrice * (1 - adjustedStopLoss / 100);
       const takeProfitPrice = currentPrice * (1 + adjustedTakeProfit / 100);
       const estimatedShares = adjustedAmount / currentPrice;
 
-      console.log(`🚀 AGGRESSIVE ENTRY: ${rec.symbol} $${adjustedAmount.toFixed(2)} (~${estimatedShares.toFixed(3)} shares) @ $${currentPrice.toFixed(2)}`);
+      console.log(`🎯 QUALITY ENTRY: ${rec.symbol} $${adjustedAmount.toFixed(2)} (~${estimatedShares.toFixed(3)} shares) @ $${currentPrice.toFixed(2)}`);
       console.log(`   💰 Multiplier: ${positionMultiplier.toFixed(2)}x | ${rec.aiConsensus} | Confidence: ${(rec.confidence * 100).toFixed(0)}%`);
-      console.log(`   📊 RSI: ${rsi.toFixed(1)} | Volume: ${(tech.volume_ratio || 1).toFixed(1)}x | Position: ${pricePosition.toFixed(0)}%`);
-      console.log(`   🎯 Target: $${takeProfitPrice.toFixed(2)} (+${adjustedTakeProfit}%) | Stop: $${stopLossPrice.toFixed(2)} (-${adjustedStopLoss.toFixed(1)}%)`);
+      console.log(`   📊 RSI: ${rsi.toFixed(1)} | Volume: ${volumeRatio.toFixed(1)}x | Position: ${pricePosition.toFixed(0)}%`);
+      console.log(`   🎯 Target: $${takeProfitPrice.toFixed(2)} (+${adjustedTakeProfit}%) | Stop: $${stopLossPrice.toFixed(2)} (-${adjustedStopLoss.toFixed(1)}%) | R:R ${riskRewardRatio.toFixed(2)}`);
 
-      // ========== PRE-TRADE BACKTESTING VALIDATION ==========
-      console.log(`📊 Running backtest validation for ${rec.symbol}...`);
+      // ========== STRICTER PRE-TRADE BACKTESTING VALIDATION ==========
+      console.log(`📊 Running strict backtest validation for ${rec.symbol}...`);
       let backtestResult = null;
       let backtestPassed = false;
       
@@ -791,9 +867,9 @@ serve(async (req) => {
           .from('backtest_strategies')
           .insert({
             name: `Auto-Strategy-${rec.symbol}-${Date.now()}`,
-            description: 'Momentum-based strategy with RSI/Volume filters',
-            buy_condition: adjustedStopLoss.toFixed(2), // Buy on dips
-            sell_condition: adjustedTakeProfit.toFixed(2), // Sell on gains
+            description: 'Conservative momentum strategy with strict filters',
+            buy_condition: adjustedStopLoss.toFixed(2),
+            sell_condition: adjustedTakeProfit.toFixed(2),
             initial_capital: 10000,
           })
           .select()
@@ -819,32 +895,33 @@ serve(async (req) => {
             const backtestData = await backtestResponse.json();
             backtestResult = backtestData.result;
             
-            // Validation criteria: positive return OR high win rate
-            const returnOk = backtestResult.return_percentage > 0;
-            const winRateOk = backtestResult.win_rate >= 50;
-            const tradesOk = backtestResult.total_trades >= 1; // At least 1 trade in backtest
+            // STRICTER validation criteria - must have BOTH positive return AND good win rate
+            const returnOk = backtestResult.return_percentage > 2; // At least 2% return (was 0%)
+            const winRateOk = backtestResult.win_rate >= 55;       // At least 55% win rate (was 50%)
+            const tradesOk = backtestResult.total_trades >= 2;     // At least 2 trades (was 1)
+            const drawdownOk = backtestResult.max_drawdown < 15;   // Max 15% drawdown
             
-            backtestPassed = (returnOk || winRateOk) && tradesOk;
+            backtestPassed = returnOk && winRateOk && tradesOk && drawdownOk;
             
             console.log(`📈 Backtest Results for ${rec.symbol}:`);
-            console.log(`   Return: ${backtestResult.return_percentage.toFixed(2)}%`);
-            console.log(`   Win Rate: ${backtestResult.win_rate.toFixed(2)}%`);
-            console.log(`   Trades: ${backtestResult.total_trades}`);
-            console.log(`   Max Drawdown: ${backtestResult.max_drawdown.toFixed(2)}%`);
-            console.log(`   ✅ Validation: ${backtestPassed ? 'PASSED' : 'FAILED'}`);
+            console.log(`   Return: ${backtestResult.return_percentage.toFixed(2)}% (min 2%: ${returnOk ? '✅' : '❌'})`);
+            console.log(`   Win Rate: ${backtestResult.win_rate.toFixed(2)}% (min 55%: ${winRateOk ? '✅' : '❌'})`);
+            console.log(`   Trades: ${backtestResult.total_trades} (min 2: ${tradesOk ? '✅' : '❌'})`);
+            console.log(`   Max Drawdown: ${backtestResult.max_drawdown.toFixed(2)}% (max 15%: ${drawdownOk ? '✅' : '❌'})`);
+            console.log(`   🎯 STRICT Validation: ${backtestPassed ? 'PASSED ✅' : 'FAILED ❌'}`);
           } else {
-            console.log(`⚠️ Backtest failed to run for ${rec.symbol}, proceeding with trade`);
-            backtestPassed = true; // Don't block trade if backtest fails
+            console.log(`⚠️ Backtest failed to run for ${rec.symbol}, skipping trade (strict mode)`);
+            backtestPassed = false; // In strict mode, skip if backtest fails
           }
         }
       } catch (backtestError) {
         console.error(`⚠️ Backtest error for ${rec.symbol}:`, backtestError);
-        backtestPassed = true; // Don't block trade on backtest errors
+        backtestPassed = false; // In strict mode, skip on backtest errors
       }
       
       // Skip trade if backtest failed validation
       if (!backtestPassed) {
-        console.log(`❌ Skipping ${rec.symbol}: Failed backtest validation`);
+        console.log(`❌ Skipping ${rec.symbol}: Failed strict backtest validation`);
         continue;
       }
 
