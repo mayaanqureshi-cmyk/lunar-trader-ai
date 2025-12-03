@@ -650,7 +650,7 @@ serve(async (req) => {
       sectorExposure[sector] = (sectorExposure[sector] || 0) + posValue;
     }
     
-    // Calculate momentum-adjusted position sizing (AGGRESSIVE)
+    // Calculate momentum-adjusted position sizing (AGGRESSIVE) with ATR-based risk
     const calculatePositionMultiplier = (symbol: string, confidence: number, aiConsensus: string): number => {
       const tech = technicalData.technicalData?.[symbol];
       if (!tech) return 1.0;
@@ -666,14 +666,26 @@ serve(async (req) => {
       
       // BONUS: Volume surge = bigger position
       const volumeRatio = tech.volume_ratio || 1.0;
-      if (volumeRatio > 2.0) multiplier *= 1.2; // 2x volume
-      else if (volumeRatio > 1.5) multiplier *= 1.1; // 1.5x volume
+      if (volumeRatio > 2.0) multiplier *= 1.2;
+      else if (volumeRatio > 1.5) multiplier *= 1.1;
       
-      // Slight reduction for extreme volatility only
-      const volatility = ((tech.high - tech.low) / tech.close) * 100;
-      if (volatility > 8) multiplier *= 0.8; // Only reduce for extreme volatility
+      // ATR-BASED DYNAMIC SIZING: Inverse relationship with volatility
+      // Higher ATR = smaller position, Lower ATR = larger position
+      const atr = tech.atr || 0;
+      const price = tech.close || 100;
+      const atrPercent = (atr / price) * 100;
       
-      return Math.min(multiplier, 1.5); // Cap at 150% position size
+      // Target: ~1% portfolio risk per trade
+      // If ATR% is 2%, we take smaller position. If ATR% is 0.5%, we take larger.
+      if (atrPercent > 0) {
+        const targetRiskPercent = 1.0;
+        const atrMultiplier = Math.min(2.0, Math.max(0.5, targetRiskPercent / atrPercent));
+        multiplier *= atrMultiplier;
+        console.log(`📊 ${symbol} ATR%: ${atrPercent.toFixed(2)}%, Size multiplier: ${atrMultiplier.toFixed(2)}x`);
+      }
+      
+      // Hard cap for risk management
+      return Math.min(multiplier, 2.0);
     };
     
     // AGGRESSIVE: Take more positions with higher capital allocation
