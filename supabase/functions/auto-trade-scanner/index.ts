@@ -99,19 +99,19 @@ const SECTOR_MAP: Record<string, string> = {
   'SPY': 'ETF', 'QQQ': 'ETF', 'IWM': 'ETF', 'DIA': 'ETF', 'VTI': 'ETF', 'VOO': 'ETF'
 };
 
-// ============= STRICTER RISK CONFIGURATION =============
-// Reduced trading frequency for higher quality trades
+// ============= BALANCED RISK CONFIGURATION =============
+// Moderately conservative settings for quality trades
 const RISK_CONFIG = {
   baseStopLossPercent: 4,        // Wider stops to avoid premature exits
   baseTakeProfitPercent: 10,     // Higher profit targets
-  confidenceThreshold: 0.75,     // RAISED from 0.62 - only high confidence trades
-  minTechnicalScore: 7.5,        // Minimum technical score required
-  maxSectorExposure: 0.4,        // Tighter sector limits
-  capitalDeployment: 0.80,       // Conservative capital deployment
-  requireConsensus: true,        // REQUIRE both AI models to agree
-  maxPositions: 4,               // LIMIT total positions
-  minRiskRewardRatio: 2.5,       // Minimum risk/reward ratio
-  cooldownMinutes: 60,           // Minimum time between trades for same symbol
+  confidenceThreshold: 0.68,     // Moderate confidence threshold
+  minTechnicalScore: 6.5,        // Moderate technical score required
+  maxSectorExposure: 0.5,        // Allow more sector exposure
+  capitalDeployment: 0.85,       // Moderate capital deployment
+  requireConsensus: false,       // Allow single strong AI recommendation
+  maxPositions: 6,               // Allow more positions
+  minRiskRewardRatio: 2.0,       // Moderate risk/reward ratio
+  cooldownMinutes: 30,           // Shorter cooldown between trades
 };
 
 // ============= HELPER FUNCTIONS =============
