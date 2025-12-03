@@ -11,248 +11,189 @@ import { supabase } from "@/integrations/supabase/client";
 
 const STARTING_CAPITAL = 100000;
 
-interface PaperPosition {
-  id: string;
+interface AlpacaPosition {
   symbol: string;
-  quantity: number;
-  entryPrice: number;
-  currentPrice: number;
-  entryTime: Date;
-  strategy: string;
-  stopLoss: number;
-  takeProfit: number;
+  qty: string;
+  avg_entry_price: string;
+  side: string;
+  market_value: string;
+  cost_basis: string;
+  unrealized_pl: string;
+  unrealized_plpc: string;
+  current_price: string;
 }
 
-interface TradeHistory {
+interface AlpacaOrder {
   id: string;
   symbol: string;
-  action: 'buy' | 'sell';
-  quantity: number;
-  price: number;
-  timestamp: Date;
-  pnl?: number;
-  strategy: string;
+  side: string;
+  qty: string;
+  status: string;
+  filled_avg_price: string | null;
+  filled_at: string | null;
+  created_at: string;
 }
 
-interface ICTSignal {
-  symbol: string;
-  type: 'order_block' | 'fvg' | 'liquidity_sweep' | 'market_structure';
-  direction: 'bullish' | 'bearish';
-  level: number;
-  confidence: number;
-  killZone: string;
+interface AlpacaAccount {
+  status: string;
+  buying_power: string;
+  cash: string;
+  portfolio_value: string;
+  equity: string;
+  last_equity: string;
+  daytrade_count: number;
 }
 
 export const PaperTradingDashboard = () => {
-  const [balance, setBalance] = useState(() => {
-    const saved = localStorage.getItem('paperBalance');
-    return saved ? parseFloat(saved) : STARTING_CAPITAL;
-  });
-  const [positions, setPositions] = useState<PaperPosition[]>(() => {
-    const saved = localStorage.getItem('paperPositions');
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [tradeHistory, setTradeHistory] = useState<TradeHistory[]>(() => {
-    const saved = localStorage.getItem('paperTradeHistory');
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [ictSignals, setIctSignals] = useState<ICTSignal[]>([]);
+  const [account, setAccount] = useState<AlpacaAccount | null>(null);
+  const [positions, setPositions] = useState<AlpacaPosition[]>([]);
+  const [orders, setOrders] = useState<AlpacaOrder[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [symbol, setSymbol] = useState('');
   const [quantity, setQuantity] = useState(1);
 
-  useEffect(() => {
-    localStorage.setItem('paperBalance', balance.toString());
-  }, [balance]);
+  const fetchAlpacaData = async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('fetch-alpaca-account');
+      
+      if (error) throw error;
+      
+      if (data.success) {
+        setAccount(data.account);
+        setPositions(data.positions || []);
+        setOrders(data.recent_orders || []);
+      } else {
+        throw new Error(data.error || 'Failed to fetch account');
+      }
+    } catch (err) {
+      console.error('Error fetching Alpaca data:', err);
+      toast({ title: "FAILED TO FETCH ACCOUNT", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    localStorage.setItem('paperPositions', JSON.stringify(positions));
-  }, [positions]);
-
-  useEffect(() => {
-    localStorage.setItem('paperTradeHistory', JSON.stringify(tradeHistory));
-  }, [tradeHistory]);
-
-  const totalPositionValue = positions.reduce((sum, pos) => sum + (pos.quantity * pos.currentPrice), 0);
-  const totalCostBasis = positions.reduce((sum, pos) => sum + (pos.quantity * pos.entryPrice), 0);
-  const unrealizedPnL = totalPositionValue - totalCostBasis;
-  const portfolioValue = balance + totalPositionValue;
-  const totalPnL = portfolioValue - STARTING_CAPITAL;
-  const pnlPercent = ((totalPnL / STARTING_CAPITAL) * 100).toFixed(2);
-
-  useEffect(() => {
-    const generateICTSignals = () => {
-      const currentHour = new Date().getHours();
-      let killZone = 'OFF';
-      if (currentHour >= 2 && currentHour < 5) killZone = 'LONDON';
-      else if (currentHour >= 8 && currentHour < 11) killZone = 'NY OPEN';
-      else if (currentHour >= 13 && currentHour < 16) killZone = 'NY PM';
-
-      setIctSignals([
-        { symbol: 'SPY', type: 'order_block', direction: 'bullish', level: 598.50, confidence: 0.85, killZone },
-        { symbol: 'QQQ', type: 'fvg', direction: 'bullish', level: 520.25, confidence: 0.78, killZone },
-        { symbol: 'NVDA', type: 'liquidity_sweep', direction: 'bearish', level: 145.00, confidence: 0.72, killZone },
-        { symbol: 'AAPL', type: 'market_structure', direction: 'bullish', level: 235.50, confidence: 0.82, killZone },
-      ]);
-    };
-    generateICTSignals();
-    const interval = setInterval(generateICTSignals, 60000);
+    fetchAlpacaData();
+    const interval = setInterval(fetchAlpacaData, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  const updatePrices = async () => {
-    if (positions.length === 0) return;
-    setIsLoading(true);
-    try {
-      const updatedPositions = positions.map(pos => ({
-        ...pos,
-        currentPrice: pos.currentPrice * (1 + (Math.random() - 0.5) * 0.02)
-      }));
-      setPositions(updatedPositions);
-    } finally {
-      setIsLoading(false);
+  const portfolioValue = parseFloat(account?.portfolio_value || '0');
+  const cash = parseFloat(account?.cash || '0');
+  const equity = parseFloat(account?.equity || '0');
+  const lastEquity = parseFloat(account?.last_equity || '0');
+  const dayChange = equity - lastEquity;
+  const dayChangePercent = lastEquity > 0 ? ((dayChange / lastEquity) * 100).toFixed(2) : '0.00';
+  const totalPnL = portfolioValue - STARTING_CAPITAL;
+  const totalPnLPercent = ((totalPnL / STARTING_CAPITAL) * 100).toFixed(2);
+
+  const unrealizedPnL = positions.reduce((sum, pos) => sum + parseFloat(pos.unrealized_pl || '0'), 0);
+  const positionsValue = positions.reduce((sum, pos) => sum + parseFloat(pos.market_value || '0'), 0);
+
+  const executeTrade = async (action: 'buy' | 'sell', tradeSymbol: string, qty: number) => {
+    if (!tradeSymbol) {
+      toast({ title: "ENTER SYMBOL", variant: "destructive" });
+      return;
     }
-  };
-
-  useEffect(() => {
-    const interval = setInterval(updatePrices, 30000);
-    return () => clearInterval(interval);
-  }, [positions]);
-
-  const executePaperTrade = async (action: 'buy' | 'sell', tradeSymbol: string, qty: number, strategy: string = 'MANUAL') => {
+    
     setIsLoading(true);
     try {
-      const response = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${tradeSymbol.toUpperCase()}?interval=1d&range=1d`);
-      const data = await response.json();
-      const price = data.chart.result?.[0]?.meta?.regularMarketPrice || 100;
-
-      if (action === 'buy') {
-        const totalCost = price * qty;
-        if (totalCost > balance) {
-          toast({ title: "INSUFFICIENT BALANCE", variant: "destructive" });
-          return;
-        }
-
-        const newPosition: PaperPosition = {
-          id: Date.now().toString(),
+      const { data, error } = await supabase.functions.invoke('execute-alpaca-trade', {
+        body: {
           symbol: tradeSymbol.toUpperCase(),
+          action,
           quantity: qty,
-          entryPrice: price,
-          currentPrice: price,
-          entryTime: new Date(),
-          strategy,
-          stopLoss: price * 0.97,
-          takeProfit: price * 1.08
-        };
-
-        setPositions(prev => [...prev, newPosition]);
-        setBalance(prev => prev - totalCost);
-        setTradeHistory(prev => [{
-          id: Date.now().toString(),
-          symbol: tradeSymbol.toUpperCase(),
-          action: 'buy',
-          quantity: qty,
-          price,
-          timestamp: new Date(),
-          strategy
-        }, ...prev]);
-
-        toast({ title: `BOUGHT ${qty} ${tradeSymbol.toUpperCase()} @ $${price.toFixed(2)}` });
-      } else {
-        const position = positions.find(p => p.symbol === tradeSymbol.toUpperCase());
-        if (!position) {
-          toast({ title: "NO POSITION FOUND", variant: "destructive" });
-          return;
+          orderType: 'market'
         }
+      });
 
-        const sellQty = Math.min(qty, position.quantity);
-        const proceeds = position.currentPrice * sellQty;
-        const pnl = (position.currentPrice - position.entryPrice) * sellQty;
+      if (error) throw error;
 
-        if (sellQty >= position.quantity) {
-          setPositions(prev => prev.filter(p => p.id !== position.id));
-        } else {
-          setPositions(prev => prev.map(p => p.id === position.id ? { ...p, quantity: p.quantity - sellQty } : p));
-        }
-
-        setBalance(prev => prev + proceeds);
-        setTradeHistory(prev => [{
-          id: Date.now().toString(),
-          symbol: tradeSymbol.toUpperCase(),
-          action: 'sell',
-          quantity: sellQty,
-          price: position.currentPrice,
-          timestamp: new Date(),
-          pnl,
-          strategy: position.strategy
-        }, ...prev]);
-
-        toast({
-          title: `SOLD ${sellQty} ${tradeSymbol.toUpperCase()} | ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`,
-          variant: pnl >= 0 ? "default" : "destructive"
+      if (data.success) {
+        toast({ 
+          title: `${action.toUpperCase()} ORDER PLACED`,
+          description: `${qty} ${tradeSymbol.toUpperCase()} - ${data.order.status}`
         });
+        setTimeout(fetchAlpacaData, 2000);
+      } else {
+        throw new Error(data.error || 'Trade failed');
       }
-    } catch {
-      toast({ title: "TRADE FAILED", variant: "destructive" });
+    } catch (err) {
+      console.error('Trade error:', err);
+      toast({ 
+        title: "TRADE FAILED", 
+        description: err instanceof Error ? err.message : 'Unknown error',
+        variant: "destructive" 
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const resetAccount = () => {
-    setBalance(STARTING_CAPITAL);
-    setPositions([]);
-    setTradeHistory([]);
-    toast({ title: "ACCOUNT RESET" });
+  const closePosition = async (pos: AlpacaPosition) => {
+    await executeTrade('sell', pos.symbol, parseInt(pos.qty));
   };
 
-  const executeICTTrade = (signal: ICTSignal) => {
-    const qty = Math.floor((balance * 0.1) / signal.level);
-    if (qty > 0 && signal.direction === 'bullish') {
-      executePaperTrade('buy', signal.symbol, qty, `ICT_${signal.type.toUpperCase()}`);
-    }
-  };
-
-  const chartData = tradeHistory.slice(0, 20).reverse().map((trade, index) => ({
-    time: index + 1,
-    value: STARTING_CAPITAL + tradeHistory.slice(0, tradeHistory.length - index).reduce((sum, t) => sum + (t.pnl || 0), 0)
-  }));
-  if (chartData.length === 0) chartData.push({ time: 0, value: STARTING_CAPITAL });
+  const chartData = orders
+    .filter(o => o.status === 'filled' && o.filled_avg_price)
+    .slice(0, 15)
+    .reverse()
+    .map((order, idx) => ({
+      trade: idx + 1,
+      price: parseFloat(order.filled_avg_price || '0'),
+    }));
 
   return (
     <div className="space-y-6">
-      {/* Account Overview */}
+      {/* Account Overview - Alpaca Paper */}
+      <div className="border-2 border-primary p-4 mb-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-label">ALPACA PAPER</span>
+            <span className={`px-2 py-0.5 text-xxs font-bold ${account?.status === 'ACTIVE' ? 'bg-success text-success-foreground' : 'bg-danger text-danger-foreground'}`}>
+              {account?.status || 'LOADING'}
+            </span>
+          </div>
+          <Button variant="outline" size="sm" onClick={fetchAlpacaData} disabled={isLoading} className="text-xxs h-7 border-2">
+            <RefreshCw className={`h-3 w-3 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
+            REFRESH
+          </Button>
+        </div>
+      </div>
+
       <div className="data-grid grid-cols-5">
         <div>
           <p className="text-label">PORTFOLIO</p>
-          <p className="text-value text-primary">${portfolioValue.toFixed(2)}</p>
+          <p className="text-value text-primary">${portfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
         </div>
         <div>
           <p className="text-label">CASH</p>
-          <p className="text-value">${balance.toFixed(2)}</p>
+          <p className="text-value">${cash.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
         </div>
         <div>
           <p className="text-label">POSITIONS</p>
-          <p className="text-value">${totalPositionValue.toFixed(2)}</p>
+          <p className="text-value">${positionsValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
         </div>
         <div>
-          <p className="text-label">UNREALIZED</p>
-          <p className={`text-value ${unrealizedPnL >= 0 ? 'text-success' : 'text-danger'}`}>
-            {unrealizedPnL >= 0 ? '+' : ''}${unrealizedPnL.toFixed(2)}
+          <p className="text-label">TODAY</p>
+          <p className={`text-value ${dayChange >= 0 ? 'text-success' : 'text-danger'}`}>
+            {dayChange >= 0 ? '+' : ''}${dayChange.toFixed(2)} ({dayChangePercent}%)
           </p>
         </div>
         <div>
           <p className="text-label">TOTAL P/L</p>
           <p className={`text-value ${totalPnL >= 0 ? 'text-success' : 'text-danger'}`}>
-            {totalPnL >= 0 ? '+' : ''}${totalPnL.toFixed(2)} ({pnlPercent}%)
+            {totalPnL >= 0 ? '+' : ''}${totalPnL.toFixed(2)} ({totalPnLPercent}%)
           </p>
         </div>
       </div>
 
       {/* Tabs */}
       <Tabs defaultValue="positions" className="space-y-4">
-        <TabsList className="w-full grid grid-cols-5 bg-card border-2 border-border p-0 h-auto">
-          {['POSITIONS', 'ICT', 'TRADE', 'BACKTEST', 'HISTORY'].map((tab) => (
+        <TabsList className="w-full grid grid-cols-4 bg-card border-2 border-border p-0 h-auto">
+          {['POSITIONS', 'TRADE', 'ORDERS', 'BACKTEST'].map((tab) => (
             <TabsTrigger
               key={tab}
               value={tab.toLowerCase()}
@@ -267,16 +208,10 @@ export const PaperTradingDashboard = () => {
         <TabsContent value="positions" className="space-y-4">
           <div className="border-2 border-border">
             <div className="flex items-center justify-between p-4 border-b-2 border-border">
-              <p className="text-label">OPEN POSITIONS</p>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={updatePrices} disabled={isLoading} className="text-xxs h-7 border-2">
-                  <RefreshCw className={`h-3 w-3 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
-                  REFRESH
-                </Button>
-                <Button variant="destructive" size="sm" onClick={resetAccount} className="text-xxs h-7">
-                  RESET
-                </Button>
-              </div>
+              <p className="text-label">{positions.length} POSITIONS</p>
+              <p className={`text-sm font-bold ${unrealizedPnL >= 0 ? 'text-success' : 'text-danger'}`}>
+                UNREALIZED: {unrealizedPnL >= 0 ? '+' : ''}${unrealizedPnL.toFixed(2)}
+              </p>
             </div>
             {positions.length === 0 ? (
               <div className="p-8 text-center">
@@ -287,30 +222,30 @@ export const PaperTradingDashboard = () => {
                 <TableHeader>
                   <TableRow className="border-b-2 border-border hover:bg-transparent">
                     <TableHead className="text-label">SYMBOL</TableHead>
-                    <TableHead className="text-label">STRATEGY</TableHead>
                     <TableHead className="text-label text-right">QTY</TableHead>
-                    <TableHead className="text-label text-right">ENTRY</TableHead>
+                    <TableHead className="text-label text-right">AVG ENTRY</TableHead>
                     <TableHead className="text-label text-right">CURRENT</TableHead>
+                    <TableHead className="text-label text-right">MKT VALUE</TableHead>
                     <TableHead className="text-label text-right">P/L</TableHead>
                     <TableHead className="text-label text-right">ACTION</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {positions.map(pos => {
-                    const pnl = (pos.currentPrice - pos.entryPrice) * pos.quantity;
-                    const pnlPct = ((pos.currentPrice - pos.entryPrice) / pos.entryPrice * 100);
+                    const pnl = parseFloat(pos.unrealized_pl);
+                    const pnlPercent = (parseFloat(pos.unrealized_plpc) * 100).toFixed(2);
                     return (
-                      <TableRow key={pos.id} className="border-b border-border hover:bg-secondary/50">
+                      <TableRow key={pos.symbol} className="border-b border-border hover:bg-secondary/50">
                         <TableCell className="font-bold">{pos.symbol}</TableCell>
-                        <TableCell className="text-xxs text-muted-foreground">{pos.strategy}</TableCell>
-                        <TableCell className="text-right mono-display">{pos.quantity}</TableCell>
-                        <TableCell className="text-right mono-display">${pos.entryPrice.toFixed(2)}</TableCell>
-                        <TableCell className="text-right mono-display">${pos.currentPrice.toFixed(2)}</TableCell>
+                        <TableCell className="text-right mono-display">{pos.qty}</TableCell>
+                        <TableCell className="text-right mono-display">${parseFloat(pos.avg_entry_price).toFixed(2)}</TableCell>
+                        <TableCell className="text-right mono-display">${parseFloat(pos.current_price).toFixed(2)}</TableCell>
+                        <TableCell className="text-right mono-display">${parseFloat(pos.market_value).toLocaleString()}</TableCell>
                         <TableCell className={`text-right font-bold ${pnl >= 0 ? 'text-success' : 'text-danger'}`}>
-                          {pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} ({pnlPct.toFixed(1)}%)
+                          {pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} ({pnlPercent}%)
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button size="sm" variant="destructive" className="h-6 text-xxs" onClick={() => executePaperTrade('sell', pos.symbol, pos.quantity)}>
+                          <Button size="sm" variant="destructive" className="h-6 text-xxs" onClick={() => closePosition(pos)} disabled={isLoading}>
                             CLOSE
                           </Button>
                         </TableCell>
@@ -324,84 +259,124 @@ export const PaperTradingDashboard = () => {
 
           {chartData.length > 1 && (
             <div className="border-2 border-border p-4">
-              <p className="text-label mb-4">EQUITY CURVE</p>
+              <p className="text-label mb-4">RECENT FILLS</p>
               <ResponsiveContainer width="100%" height={150}>
                 <AreaChart data={chartData}>
                   <defs>
-                    <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                    <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.4}/>
                       <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
-                  <XAxis dataKey="time" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} />
-                  <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} domain={['dataMin - 500', 'dataMax + 500']} />
+                  <XAxis dataKey="trade" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} />
+                  <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} />
                   <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '2px solid hsl(var(--border))', borderRadius: 0, fontSize: 12 }} />
-                  <Area type="monotone" dataKey="value" stroke="hsl(var(--primary))" fill="url(#colorValue)" strokeWidth={2} />
+                  <Area type="monotone" dataKey="price" stroke="hsl(var(--primary))" fill="url(#colorPrice)" strokeWidth={2} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
           )}
         </TabsContent>
 
-        {/* ICT Signals */}
-        <TabsContent value="ict" className="space-y-4">
-          <div className="border-2 border-border p-4">
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-label">ICT SIGNALS</p>
-              <span className={`px-3 py-1 text-xxs font-bold border-2 ${ictSignals[0]?.killZone !== 'OFF' ? 'border-success text-success' : 'border-border text-muted-foreground'}`}>
-                {ictSignals[0]?.killZone || 'OFF'}
-              </span>
-            </div>
-            <div className="space-y-2">
-              {ictSignals.map((signal, idx) => (
-                <div key={idx} className="flex items-center justify-between p-3 border-2 border-border bg-secondary/30">
-                  <div className="flex items-center gap-4">
-                    <span className="font-bold text-lg">{signal.symbol}</span>
-                    <span className="text-xxs text-muted-foreground uppercase">{signal.type.replace('_', ' ')}</span>
-                    <span className={`px-2 py-0.5 text-xxs font-bold ${signal.direction === 'bullish' ? 'bg-success text-success-foreground' : 'bg-danger text-danger-foreground'}`}>
-                      {signal.direction.toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <span className="mono-display text-sm">${signal.level.toFixed(2)}</span>
-                    <span className="text-xxs text-muted-foreground">{(signal.confidence * 100).toFixed(0)}%</span>
-                    {signal.direction === 'bullish' && (
-                      <Button size="sm" onClick={() => executeICTTrade(signal)} disabled={isLoading} className="h-6 text-xxs">
-                        TRADE
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </TabsContent>
-
-        {/* Manual Trade */}
+        {/* Trade */}
         <TabsContent value="trade">
           <div className="border-2 border-border p-6">
-            <p className="text-label mb-4">MANUAL TRADE</p>
+            <p className="text-label mb-4">EXECUTE TRADE (ALPACA PAPER)</p>
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label className="text-label">SYMBOL</Label>
-                <Input placeholder="AAPL" value={symbol} onChange={e => setSymbol(e.target.value.toUpperCase())} className="border-2 font-bold" />
+                <Input 
+                  placeholder="AAPL" 
+                  value={symbol} 
+                  onChange={e => setSymbol(e.target.value.toUpperCase())} 
+                  className="border-2 font-bold" 
+                />
               </div>
               <div className="space-y-2">
                 <Label className="text-label">QUANTITY</Label>
-                <Input type="number" min="1" value={quantity} onChange={e => setQuantity(parseInt(e.target.value) || 1)} className="border-2 font-bold" />
+                <Input 
+                  type="number" 
+                  min="1" 
+                  value={quantity} 
+                  onChange={e => setQuantity(parseInt(e.target.value) || 1)} 
+                  className="border-2 font-bold" 
+                />
               </div>
               <div className="space-y-2">
                 <Label className="text-label">&nbsp;</Label>
                 <div className="flex gap-2">
-                  <Button className="flex-1 h-10 font-bold" onClick={() => executePaperTrade('buy', symbol, quantity)} disabled={!symbol || isLoading}>
+                  <Button 
+                    className="flex-1 h-10 font-bold" 
+                    onClick={() => executeTrade('buy', symbol, quantity)} 
+                    disabled={!symbol || isLoading}
+                  >
                     BUY
                   </Button>
-                  <Button variant="destructive" className="flex-1 h-10 font-bold" onClick={() => executePaperTrade('sell', symbol, quantity)} disabled={!symbol || isLoading}>
+                  <Button 
+                    variant="destructive" 
+                    className="flex-1 h-10 font-bold" 
+                    onClick={() => executeTrade('sell', symbol, quantity)} 
+                    disabled={!symbol || isLoading}
+                  >
                     SELL
                   </Button>
                 </div>
               </div>
             </div>
+            <p className="text-xxs text-muted-foreground mt-4">
+              BUYING POWER: ${parseFloat(account?.buying_power || '0').toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </p>
+          </div>
+        </TabsContent>
+
+        {/* Orders */}
+        <TabsContent value="orders">
+          <div className="border-2 border-border">
+            <div className="p-4 border-b-2 border-border">
+              <p className="text-label">RECENT ORDERS</p>
+            </div>
+            {orders.length === 0 ? (
+              <div className="p-8 text-center">
+                <p className="text-muted-foreground text-sm">NO ORDERS</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b-2 border-border hover:bg-transparent">
+                    <TableHead className="text-label">TIME</TableHead>
+                    <TableHead className="text-label">SYMBOL</TableHead>
+                    <TableHead className="text-label">SIDE</TableHead>
+                    <TableHead className="text-label text-right">QTY</TableHead>
+                    <TableHead className="text-label text-right">FILL PRICE</TableHead>
+                    <TableHead className="text-label">STATUS</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {orders.map(order => (
+                    <TableRow key={order.id} className="border-b border-border hover:bg-secondary/50">
+                      <TableCell className="text-xxs text-muted-foreground">
+                        {order.filled_at ? new Date(order.filled_at).toLocaleString() : new Date(order.created_at).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="font-bold">{order.symbol}</TableCell>
+                      <TableCell>
+                        <span className={`px-2 py-0.5 text-xxs font-bold ${order.side === 'buy' ? 'bg-success text-success-foreground' : 'bg-danger text-danger-foreground'}`}>
+                          {order.side.toUpperCase()}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right mono-display">{order.qty}</TableCell>
+                      <TableCell className="text-right mono-display">
+                        {order.filled_avg_price ? `$${parseFloat(order.filled_avg_price).toFixed(2)}` : '-'}
+                      </TableCell>
+                      <TableCell>
+                        <span className={`text-xxs font-bold ${order.status === 'filled' ? 'text-success' : order.status === 'canceled' ? 'text-danger' : 'text-warning'}`}>
+                          {order.status.toUpperCase()}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </div>
         </TabsContent>
 
@@ -455,51 +430,6 @@ export const PaperTradingDashboard = () => {
             >
               {isLoading ? 'RUNNING...' : 'RUN BACKTEST'}
             </Button>
-          </div>
-        </TabsContent>
-
-        {/* History */}
-        <TabsContent value="history">
-          <div className="border-2 border-border">
-            <div className="p-4 border-b-2 border-border">
-              <p className="text-label">{tradeHistory.length} TRADES</p>
-            </div>
-            {tradeHistory.length === 0 ? (
-              <div className="p-8 text-center">
-                <p className="text-muted-foreground text-sm">NO TRADES YET</p>
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-b-2 border-border hover:bg-transparent">
-                    <TableHead className="text-label">TIME</TableHead>
-                    <TableHead className="text-label">SYMBOL</TableHead>
-                    <TableHead className="text-label">ACTION</TableHead>
-                    <TableHead className="text-label text-right">QTY</TableHead>
-                    <TableHead className="text-label text-right">PRICE</TableHead>
-                    <TableHead className="text-label text-right">P/L</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {tradeHistory.slice(0, 30).map(trade => (
-                    <TableRow key={trade.id} className="border-b border-border hover:bg-secondary/50">
-                      <TableCell className="text-xxs text-muted-foreground">{new Date(trade.timestamp).toLocaleString()}</TableCell>
-                      <TableCell className="font-bold">{trade.symbol}</TableCell>
-                      <TableCell>
-                        <span className={`px-2 py-0.5 text-xxs font-bold ${trade.action === 'buy' ? 'bg-success text-success-foreground' : 'bg-danger text-danger-foreground'}`}>
-                          {trade.action.toUpperCase()}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right mono-display">{trade.quantity}</TableCell>
-                      <TableCell className="text-right mono-display">${trade.price.toFixed(2)}</TableCell>
-                      <TableCell className={`text-right font-bold ${trade.pnl && trade.pnl >= 0 ? 'text-success' : trade.pnl ? 'text-danger' : ''}`}>
-                        {trade.pnl !== undefined ? `${trade.pnl >= 0 ? '+' : ''}$${trade.pnl.toFixed(2)}` : '-'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
           </div>
         </TabsContent>
       </Tabs>
