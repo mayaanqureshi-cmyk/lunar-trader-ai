@@ -9,7 +9,7 @@ import { toast } from "@/hooks/use-toast";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 
-const STARTING_CAPITAL = 10000;
+const STARTING_CAPITAL = 100000;
 
 interface PaperPosition {
   id: string;
