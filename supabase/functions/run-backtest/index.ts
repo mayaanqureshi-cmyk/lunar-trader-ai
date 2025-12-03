@@ -51,9 +51,20 @@ serve(async (req) => {
     }
 
     const historicalData = await historicalResponse.json();
+    console.log("Yahoo response:", JSON.stringify(historicalData).slice(0, 500));
+    
+    // Validate Yahoo Finance response
+    if (!historicalData.chart?.result?.[0]) {
+      throw new Error(`No data returned for ${symbol}. Check if the symbol is valid.`);
+    }
+    
     const quotes = historicalData.chart.result[0];
     const timestamps = quotes.timestamp;
-    const prices = quotes.indicators.quote[0];
+    const prices = quotes.indicators?.quote?.[0];
+
+    if (!timestamps || !timestamps.length || !prices?.close) {
+      throw new Error(`Insufficient historical data for ${symbol}. Try a different date range or symbol.`);
+    }
 
     // Run backtest simulation
     let capital = strategy.initial_capital;
