@@ -1041,8 +1041,8 @@ serve(async (req) => {
           .insert({
             name: `Auto-Strategy-${rec.symbol}-${Date.now()}`,
             description: 'Conservative momentum strategy with strict filters',
-            buy_condition: adjustedStopLoss.toFixed(2),
-            sell_condition: adjustedTakeProfit.toFixed(2),
+            buy_condition: `SL:${stopLossPercent.toFixed(2)}%`,
+            sell_condition: `TP:${takeProfitPercent.toFixed(2)}%`,
             initial_capital: 10000,
           })
           .select()
@@ -1129,7 +1129,7 @@ serve(async (req) => {
             entryPrice: currentPrice,
             stopLoss: stopLossPrice,
             takeProfit: takeProfitPrice,
-            positionMultiplier: positionMultiplier,
+            positionMultiplier: regimeConfig.positionSizeMultiplier,
             aiConsensus: rec.aiConsensus,
             sector: sector,
             entryRSI: rsi,
