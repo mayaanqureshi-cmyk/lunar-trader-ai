@@ -245,14 +245,52 @@ const Index = () => {
   const displayPL = getDisplayPL();
   const isPositive = displayPL.value >= 0;
 
-  const strategyRules = [
-    { name: 'Market Regime', value: 'Adaptive', desc: 'Detects BULL/BEAR/CHOPPY conditions' },
-    { name: 'Entry Signal', value: 'ICT + AI', desc: 'Order blocks, FVG, liquidity sweeps' },
-    { name: 'Position Sizing', value: 'ATR-Based', desc: '~1% portfolio risk per trade' },
-    { name: 'Stop Loss', value: 'Dynamic', desc: 'ATR-adjusted based on volatility' },
-    { name: 'Take Profit', value: '2.0x R:R', desc: 'Minimum risk/reward ratio' },
-    { name: 'Max Positions', value: '6', desc: 'Sector-diversified exposure' },
-  ];
+  const strategyDocs = {
+    overview: "A systematic, quantitative trading strategy combining Inner Circle Trader (ICT) methodology with AI-driven analysis and strict risk management.",
+    
+    sections: [
+      {
+        title: "Market Analysis",
+        items: [
+          { label: "Regime Detection", detail: "Classifies market as BULL, BEAR, or CHOPPY using SPY/QQQ price action and volatility" },
+          { label: "Multi-Timeframe", detail: "Analyzes daily, weekly, and monthly charts for confluence" },
+          { label: "Technical Indicators", detail: "RSI, MACD, Bollinger Bands, ADX, Stochastic, ATR" },
+        ]
+      },
+      {
+        title: "Entry Criteria",
+        items: [
+          { label: "ICT Concepts", detail: "Order blocks, fair value gaps, liquidity sweeps, market structure breaks" },
+          { label: "AI Confidence", detail: "Minimum 68% confidence from GPT-4 analysis required" },
+          { label: "Backtest Validation", detail: "30-day historical backtest must show positive return or >55% win rate" },
+        ]
+      },
+      {
+        title: "Risk Management",
+        items: [
+          { label: "Position Sizing", detail: "ATR-based sizing targeting ~1% portfolio risk per trade" },
+          { label: "Stop Loss", detail: "Dynamic ATR-adjusted stops (typically 1.5-2.5x ATR below entry)" },
+          { label: "Take Profit", detail: "Minimum 2.0x risk-reward ratio required" },
+          { label: "Max Exposure", detail: "Maximum 6 concurrent positions, 85% capital deployment" },
+        ]
+      },
+      {
+        title: "Exit Strategy",
+        items: [
+          { label: "Trailing Stop", detail: "8% trailing stop that triggers if price drops 3% from peak" },
+          { label: "Profit Target", detail: "12% take profit level" },
+          { label: "Stop Loss", detail: "3% maximum loss per position" },
+        ]
+      },
+    ],
+    
+    constraints: [
+      "No trading during first/last 15 minutes of session",
+      "Sector diversification required across positions",
+      "30-minute cooldown between trades",
+      "Maximum 15% portfolio drawdown limit",
+    ]
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -466,41 +504,44 @@ const Index = () => {
           </div>
         ) : (
           /* Strategy Tab */
-          <div>
-            <p className="text-caption mb-6">Active Strategy Configuration</p>
-            
-            <div className="space-y-6">
-              {strategyRules.map((rule, i) => (
-                <div key={i} className="border-b border-border pb-4 last:border-0">
-                  <div className="flex justify-between items-baseline mb-1">
-                    <p className="text-sm">{rule.name}</p>
-                    <p className="font-medium">{rule.value}</p>
-                  </div>
-                  <p className="text-caption">{rule.desc}</p>
-                </div>
-              ))}
+          <div className="space-y-10">
+            {/* Overview */}
+            <div>
+              <p className="text-lg font-light leading-relaxed">
+                {strategyDocs.overview}
+              </p>
             </div>
 
-            <div className="mt-10 pt-8 border-t border-border">
-              <p className="text-caption mb-4">Strategy Performance</p>
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <p className="text-caption mb-1">Backtest Win Rate</p>
-                  <p className="text-lg">&gt;55%</p>
-                </div>
-                <div>
-                  <p className="text-caption mb-1">Min R:R Ratio</p>
-                  <p className="text-lg">2.0x</p>
-                </div>
-                <div>
-                  <p className="text-caption mb-1">Max Drawdown Limit</p>
-                  <p className="text-lg">15%</p>
-                </div>
-                <div>
-                  <p className="text-caption mb-1">Capital Deployment</p>
-                  <p className="text-lg">85%</p>
+            {/* Sections */}
+            {strategyDocs.sections.map((section, i) => (
+              <div key={i}>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground mb-4">
+                  {section.title}
+                </p>
+                <div className="space-y-4">
+                  {section.items.map((item, j) => (
+                    <div key={j} className="border-l-2 border-border pl-4">
+                      <p className="font-medium mb-1">{item.label}</p>
+                      <p className="text-sm text-muted-foreground">{item.detail}</p>
+                    </div>
+                  ))}
                 </div>
               </div>
+            ))}
+
+            {/* Constraints */}
+            <div className="pt-8 border-t border-border">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-4">
+                Trading Constraints
+              </p>
+              <ul className="space-y-2">
+                {strategyDocs.constraints.map((constraint, i) => (
+                  <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
+                    <span className="text-foreground">—</span>
+                    {constraint}
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         )}
