@@ -734,7 +734,25 @@ serve(async (req) => {
     console.log(`   Profit multiplier: ${regimeConfig.takeProfitMultiplier}x`);
     
     if (currentPositions.length > 0) {
-      console.log('💰 ATR-Based Exit Strategy: Checking dynamic stops & profit targets...');
+      console.log('💰 Exit Strategy: Checking stops, partial profits & time-based exits...');
+      
+      // Fetch recent orders to determine position age
+      const ordersResponse = await fetch('https://paper-api.alpaca.markets/v2/orders?status=filled&limit=500&direction=desc', {
+        headers: {
+          'APCA-API-KEY-ID': ALPACA_API_KEY,
+          'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
+        },
+      });
+      
+      const recentOrders = ordersResponse.ok ? await ordersResponse.json() : [];
+      
+      // Build map of position entry dates (first buy order for each symbol)
+      const positionEntryDates: Record<string, Date> = {};
+      for (const order of recentOrders.reverse()) {
+        if (order.side === 'buy' && order.status === 'filled' && !positionEntryDates[order.symbol]) {
+          positionEntryDates[order.symbol] = new Date(order.filled_at || order.created_at);
+        }
+      }
       
       for (const pos of currentPositions) {
         const profitPercent = parseFloat(pos.unrealized_plpc) * 100;
@@ -743,24 +761,28 @@ serve(async (req) => {
         const qty = parseFloat(pos.qty_available || pos.qty);
         const totalQty = parseFloat(pos.qty);
         
+        // Calculate position age in days
+        const entryDate = positionEntryDates[pos.symbol];
+        const positionAgeDays = entryDate 
+          ? Math.floor((Date.now() - entryDate.getTime()) / (1000 * 60 * 60 * 24))
+          : 0;
+        
         // Get technical data for ATR and momentum indicators
         const tech = technicalData.technicalData?.[pos.symbol] || technicalData[pos.symbol];
-        const atr = tech?.atr || (currentPrice * 0.02); // Default 2% ATR if not available
+        const atr = tech?.atr || (currentPrice * 0.02);
         const rsi = tech?.rsi || 50;
         const macdSignal = tech?.macd_signal || 0;
         
-        // ATR-based dynamic stop loss (adjusted for regime)
+        // ATR-based dynamic stop loss
         const atrStopPercent = (atr / currentPrice) * 100 * RISK_CONFIG.atrStopMultiplier * regimeConfig.stopLossMultiplier;
-        const dynamicStopLoss = Math.max(2, Math.min(8, atrStopPercent)); // Clamp 2-8%
+        const dynamicStopLoss = Math.max(2, Math.min(8, atrStopPercent));
         
-        // Calculate trailing stop based on ATR
+        // Trailing stop calculation
         const peakPrice = Math.max(currentPrice, avgEntry * 1.1);
         const dipFromPeak = ((peakPrice - currentPrice) / peakPrice) * 100;
-        
-        // ATR-based trailing threshold (tighter in bear, looser in bull)
         const trailingThreshold = dynamicStopLoss * 0.6;
         
-        console.log(`📊 ${pos.symbol}: P/L ${profitPercent.toFixed(2)}%, ATR Stop: ${dynamicStopLoss.toFixed(1)}%, Dip: ${dipFromPeak.toFixed(2)}%`);
+        console.log(`📊 ${pos.symbol}: P/L ${profitPercent.toFixed(2)}%, Age: ${positionAgeDays}d, ATR Stop: ${dynamicStopLoss.toFixed(1)}%`);
         
         if (qty <= 0) {
           console.log(`⏭️ Skipping ${pos.symbol}: No shares available`);
@@ -770,26 +792,36 @@ serve(async (req) => {
         let sellReason = '';
         let sellQty = qty;
         
-        // EXIT 1: ATR-based trailing stop (profit > 2*ATR stop, dip > ATR threshold)
-        if (profitPercent > dynamicStopLoss * 2 && dipFromPeak > trailingThreshold) {
-          sellReason = `ATR trailing stop: ${profitPercent.toFixed(2)}% profit, ${dipFromPeak.toFixed(2)}% dip (threshold: ${trailingThreshold.toFixed(1)}%)`;
+        // ============= EXIT RULES (in priority order) =============
+        
+        // EXIT 1: ATR-based stop-loss (loss > ATR stop)
+        if (profitPercent < -dynamicStopLoss) {
+          sellReason = `Stop-loss: ${profitPercent.toFixed(2)}% loss (limit: -${dynamicStopLoss.toFixed(1)}%)`;
         }
-        // EXIT 2: Partial profit-taking at 1.5x ATR target
-        else if (profitPercent >= dynamicStopLoss * 1.5 && profitPercent < dynamicStopLoss * 3 && qty >= 2) {
+        // EXIT 2: Bear market quick exit (tighter stops)
+        else if (marketRegime.regime === 'BEAR' && profitPercent < -(dynamicStopLoss * 0.7)) {
+          sellReason = `Bear market stop: ${profitPercent.toFixed(2)}% loss`;
+        }
+        // EXIT 3: TIME-BASED EXIT - Close stale positions (>10 days, <3% gain)
+        else if (positionAgeDays >= 10 && profitPercent < 3 && profitPercent > -dynamicStopLoss) {
+          sellReason = `Time-based exit: ${positionAgeDays} days old with only ${profitPercent.toFixed(2)}% gain`;
+        }
+        // EXIT 4: PARTIAL PROFIT TAKING - Sell 50% at 8%+ gain
+        else if (profitPercent >= 8 && qty >= 2) {
           sellQty = Math.floor(qty * 0.5);
-          sellReason = `ATR profit-taking: ${profitPercent.toFixed(2)}% gain (target: ${(dynamicStopLoss * 1.5).toFixed(1)}%)`;
+          sellReason = `Partial profit: Taking 50% at ${profitPercent.toFixed(2)}% gain`;
         }
-        // EXIT 3: Momentum reversal (overbought + negative MACD)
+        // EXIT 5: Full profit taking at 12%+
+        else if (profitPercent >= 12) {
+          sellReason = `Profit target: ${profitPercent.toFixed(2)}% gain (target: 12%)`;
+        }
+        // EXIT 6: ATR trailing stop (profit > 2*ATR stop, dip > threshold)
+        else if (profitPercent > dynamicStopLoss * 2 && dipFromPeak > trailingThreshold) {
+          sellReason = `Trailing stop: ${profitPercent.toFixed(2)}% profit, ${dipFromPeak.toFixed(2)}% dip from peak`;
+        }
+        // EXIT 7: Momentum reversal (overbought + negative MACD)
         else if (profitPercent > dynamicStopLoss && rsi > 75 && macdSignal < 0) {
           sellReason = `Momentum reversal: RSI ${rsi.toFixed(1)}, MACD bearish`;
-        }
-        // EXIT 4: ATR-based stop-loss (loss > ATR stop)
-        else if (profitPercent < -dynamicStopLoss) {
-          sellReason = `ATR stop-loss: ${profitPercent.toFixed(2)}% loss (limit: -${dynamicStopLoss.toFixed(1)}%)`;
-        }
-        // EXIT 5: Bear market quick exit (tighter stops)
-        else if (marketRegime.regime === 'BEAR' && profitPercent < -(dynamicStopLoss * 0.7)) {
-          sellReason = `Bear market stop: ${profitPercent.toFixed(2)}% loss (regime-adjusted)`;
         }
         
         if (sellReason) {
@@ -825,6 +857,7 @@ serve(async (req) => {
                 totalQuantity: totalQty,
                 isPartial: sellQty < qty,
                 freedCapital,
+                positionAgeDays,
                 exitRSI: rsi,
                 exitMACD: macdSignal,
                 atrStopPercent: dynamicStopLoss,
