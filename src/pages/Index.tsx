@@ -246,7 +246,7 @@ const Index = () => {
   const isPositive = displayPL.value >= 0;
 
   const strategyDocs = {
-    overview: "A systematic, quantitative trading strategy combining Inner Circle Trader (ICT) methodology with AI-driven analysis and strict risk management.",
+    overview: "A systematic, quantitative trading strategy combining technical analysis, statistical validation, and AI-driven signal generation with strict risk management.",
     
     sections: [
       {
@@ -260,7 +260,7 @@ const Index = () => {
       {
         title: "Entry Criteria",
         items: [
-          { label: "ICT Concepts", detail: "Order blocks, fair value gaps, liquidity sweeps, market structure breaks" },
+          { label: "Signal Generation", detail: "Mean reversion and momentum signals validated across multiple timeframes" },
           { label: "AI Confidence", detail: "Minimum 68% confidence from GPT-4 analysis required" },
           { label: "Backtest Validation", detail: "30-day historical backtest must show positive return or >55% win rate" },
         ]
