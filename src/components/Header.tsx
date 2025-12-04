@@ -8,47 +8,42 @@ export const Header = () => {
   const navigate = useNavigate();
 
   return (
-    <header className="border-b-2 border-border bg-card">
-      <div className="container mx-auto px-4">
-        <div className="flex items-center justify-between h-14">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-primary flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-sm">TB</span>
-              </div>
-              <span className="text-sm font-bold tracking-wider">TRADEBOT</span>
-            </div>
+    <header className="border-b border-border bg-background">
+      <div className="container mx-auto px-6">
+        <div className="flex items-center justify-between h-16">
+          <div className="flex items-center gap-6">
+            <span className="text-sm font-medium tracking-wide">TRADEBOT</span>
           </div>
           
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 px-3 py-1 border-2 border-success bg-success/10">
-              <Activity className="h-3 w-3 text-success animate-pulse-glow" />
-              <span className="text-success text-xxs font-bold tracking-wider">ONLINE</span>
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2">
+              <div className="status-dot active" />
+              <span className="text-caption tracking-wide">ACTIVE</span>
             </div>
 
             {user ? (
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 px-3 py-1 border-2 border-border">
-                  <User className="h-3 w-3" />
-                  <span className="text-xxs font-medium">{user.email}</span>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <User className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-caption">{user.email}</span>
                 </div>
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
                   onClick={signOut}
-                  className="h-8 text-xxs font-bold tracking-wider border-2"
+                  className="h-8 text-xs text-muted-foreground hover:text-foreground"
                 >
-                  <LogOut className="h-3 w-3 mr-1" />
-                  EXIT
+                  <LogOut className="h-3.5 w-3.5" />
                 </Button>
               </div>
             ) : (
               <Button
+                variant="ghost"
                 size="sm"
                 onClick={() => navigate("/auth")}
-                className="h-8 text-xxs font-bold tracking-wider"
+                className="h-8 text-xs"
               >
-                LOGIN
+                Login
               </Button>
             )}
           </div>
