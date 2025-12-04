@@ -19,10 +19,10 @@ interface TradeRecommendation {
   recommendation: string;
   confidence: number;
   reasoning: string;
-  geminiReasoning?: string;
-  gptReasoning?: string;
-  geminiConfidence?: number;
-  gptConfidence?: number;
+  gpt4oReasoning?: string;
+  gptMiniReasoning?: string;
+  gpt4oConfidence?: number;
+  gptMiniConfidence?: number;
   priceTarget: number;
   stopLoss: number;
   technicalScore: number;
@@ -490,10 +490,10 @@ CRITERIA:
     if (rec.confidence >= RISK_CONFIG.confidenceThreshold && rec.recommendation === 'BUY') {
       recMap.set(rec.symbol, {
         ...rec,
-        geminiConfidence: rec.confidence,
-        gptConfidence: 0,
-        geminiReasoning: rec.reasoning,
-        gptReasoning: '',
+        gpt4oConfidence: rec.confidence,
+        gptMiniConfidence: 0,
+        gpt4oReasoning: rec.reasoning,
+        gptMiniReasoning: '',
         aiConsensus: 'GPT-4o Only'
       });
     }
@@ -503,9 +503,9 @@ CRITERIA:
     if (rec.confidence >= RISK_CONFIG.confidenceThreshold && rec.recommendation === 'BUY') {
       const existing = recMap.get(rec.symbol);
       if (existing) {
-        existing.gptConfidence = rec.confidence;
-        existing.confidence = (existing.geminiConfidence! + rec.confidence) / 2;
-        existing.gptReasoning = rec.reasoning;
+        existing.gptMiniConfidence = rec.confidence;
+        existing.confidence = (existing.gpt4oConfidence! + rec.confidence) / 2;
+        existing.gptMiniReasoning = rec.reasoning;
         existing.priceTarget = (existing.priceTarget + rec.priceTarget) / 2;
         existing.stopLoss = Math.max(existing.stopLoss, rec.stopLoss);
         existing.technicalScore = (existing.technicalScore + (rec.technicalScore || 0)) / 2;
@@ -513,10 +513,10 @@ CRITERIA:
       } else {
         recMap.set(rec.symbol, {
           ...rec,
-          geminiConfidence: 0,
-          gptConfidence: rec.confidence,
-          geminiReasoning: '',
-          gptReasoning: rec.reasoning,
+          gpt4oConfidence: 0,
+          gptMiniConfidence: rec.confidence,
+          gpt4oReasoning: '',
+          gptMiniReasoning: rec.reasoning,
           aiConsensus: 'GPT-4o-mini Only'
         });
       }
@@ -532,14 +532,14 @@ CRITERIA:
     .slice(0, 15)
     .map(rec => ({
       ...rec,
-      reasoning: rec.geminiReasoning && rec.gptReasoning 
-        ? `🤖 Gemini: ${rec.geminiReasoning} | 🤖 GPT: ${rec.gptReasoning}`
-        : rec.geminiReasoning || rec.gptReasoning!,
+      reasoning: rec.gpt4oReasoning && rec.gptMiniReasoning 
+        ? `🤖 GPT-4o: ${rec.gpt4oReasoning} | 🤖 GPT-mini: ${rec.gptMiniReasoning}`
+        : rec.gpt4oReasoning || rec.gptMiniReasoning!,
       technicalIndicators: technicalData[rec.symbol] || {},
       fundamentals: { 
         aiModels: rec.aiConsensus,
-        geminiScore: rec.geminiConfidence, 
-        gptScore: rec.gptConfidence 
+        gpt4oScore: rec.gpt4oConfidence, 
+        gptMiniScore: rec.gptMiniConfidence 
       },
       timeframe: '1-3 day swing trade'
     }));
