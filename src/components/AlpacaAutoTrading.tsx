@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
+import { useEffect, useCallback } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 interface AlpacaAutoTradingProps {
   onAutoTradingChange: (enabled: boolean) => void;
@@ -11,50 +11,21 @@ interface AlpacaAutoTradingProps {
 }
 
 export const AlpacaAutoTrading = ({ onAutoTradingChange, onMaxPositionSizeChange }: AlpacaAutoTradingProps) => {
-  const [isEnabled, setIsEnabled] = useState(() => {
-    const saved = localStorage.getItem('autoTradingEnabled');
-    return saved ? JSON.parse(saved) : false;
-  });
-  const [maxPositionSize, setMaxPositionSize] = useState(() => {
-    const saved = localStorage.getItem('maxPositionSize');
-    return saved ? Number(saved) : 100;
-  });
-  const [minConfidence, setMinConfidence] = useState(() => {
-    const saved = localStorage.getItem('minConfidence');
-    return saved ? Number(saved) : 0.7;
-  });
-  const [stopLossPercent, setStopLossPercent] = useState(() => {
-    const saved = localStorage.getItem('stopLossPercent');
-    return saved ? Number(saved) : 2;
-  });
-  const [takeProfitPercent, setTakeProfitPercent] = useState(() => {
-    const saved = localStorage.getItem('takeProfitPercent');
-    return saved ? Number(saved) : 6;
-  });
+  const [isEnabled, setIsEnabled] = useLocalStorage('autoTradingEnabled', false);
+  const [maxPositionSize, setMaxPositionSize] = useLocalStorage('maxPositionSize', 100);
+  const [minConfidence, setMinConfidence] = useLocalStorage('minConfidence', 0.7);
+  const [stopLossPercent, setStopLossPercent] = useLocalStorage('stopLossPercent', 2);
+  const [takeProfitPercent, setTakeProfitPercent] = useLocalStorage('takeProfitPercent', 6);
 
   useEffect(() => {
-    localStorage.setItem('autoTradingEnabled', JSON.stringify(isEnabled));
     onAutoTradingChange(isEnabled);
   }, [isEnabled, onAutoTradingChange]);
 
   useEffect(() => {
-    localStorage.setItem('maxPositionSize', String(maxPositionSize));
     onMaxPositionSizeChange(maxPositionSize);
   }, [maxPositionSize, onMaxPositionSizeChange]);
 
-  useEffect(() => {
-    localStorage.setItem('minConfidence', String(minConfidence));
-  }, [minConfidence]);
-
-  useEffect(() => {
-    localStorage.setItem('stopLossPercent', String(stopLossPercent));
-  }, [stopLossPercent]);
-
-  useEffect(() => {
-    localStorage.setItem('takeProfitPercent', String(takeProfitPercent));
-  }, [takeProfitPercent]);
-
-  const handleToggle = (checked: boolean) => {
+  const handleToggle = useCallback((checked: boolean) => {
     setIsEnabled(checked);
     toast({
       title: checked ? "AUTO-TRADE ENABLED" : "AUTO-TRADE DISABLED",
@@ -62,7 +33,7 @@ export const AlpacaAutoTrading = ({ onAutoTradingChange, onMaxPositionSizeChange
         ? "System will execute trades automatically" 
         : "Manual mode active",
     });
-  };
+  }, [setIsEnabled]);
 
   return (
     <div className="space-y-6">

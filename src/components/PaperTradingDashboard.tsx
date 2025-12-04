@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,7 @@ import { RefreshCw } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
+import { backtestFormSchema } from "@/lib/validation";
 
 const STARTING_CAPITAL = 100000;
 
@@ -51,6 +52,57 @@ export const PaperTradingDashboard = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [symbol, setSymbol] = useState('');
   const [quantity, setQuantity] = useState(1);
+  
+  // Backtest form state
+  const [backtestSymbol, setBacktestSymbol] = useState('SPY');
+  const [backtestDays, setBacktestDays] = useState(30);
+  const [backtestBuy, setBacktestBuy] = useState(2);
+  const [backtestSell, setBacktestSell] = useState(3);
+
+  const runBacktest = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const validation = backtestFormSchema.safeParse({
+        symbol: backtestSymbol.toUpperCase(),
+        days: backtestDays,
+        buyThreshold: backtestBuy,
+        sellThreshold: backtestSell,
+      });
+
+      if (!validation.success) {
+        toast({ 
+          title: "VALIDATION ERROR", 
+          description: validation.error.issues[0]?.message || "Invalid input",
+          variant: "destructive" 
+        });
+        return;
+      }
+
+      const { symbol, days, buyThreshold, sellThreshold } = validation.data;
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+      
+      const { data, error } = await supabase.functions.invoke('run-backtest', {
+        body: { 
+          symbol, 
+          startDate: startDate.toISOString().split('T')[0], 
+          endDate: endDate.toISOString().split('T')[0], 
+          buyThreshold: String(buyThreshold), 
+          sellThreshold: String(sellThreshold), 
+          initialCapital: STARTING_CAPITAL 
+        }
+      });
+      
+      if (error) throw error;
+      const result = data.result;
+      toast({ title: `BACKTEST: ${symbol} | ${result.return_percentage?.toFixed(2) || 0}% | WIN: ${result.win_rate?.toFixed(1) || 0}%` });
+    } catch (err) {
+      toast({ title: "BACKTEST ERROR", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [backtestSymbol, backtestDays, backtestBuy, backtestSell]);
 
   const fetchAlpacaData = async () => {
     setIsLoading(true);
@@ -387,46 +439,46 @@ export const PaperTradingDashboard = () => {
             <div className="grid grid-cols-4 gap-4 mb-4">
               <div className="space-y-2">
                 <Label className="text-label">SYMBOL</Label>
-                <Input id="backtest-symbol" defaultValue="SPY" className="border-2 font-bold" />
+                <Input 
+                  value={backtestSymbol} 
+                  onChange={(e) => setBacktestSymbol(e.target.value.toUpperCase())} 
+                  className="border-2 font-bold" 
+                />
               </div>
               <div className="space-y-2">
                 <Label className="text-label">DAYS</Label>
-                <Input type="number" id="backtest-days" defaultValue="30" className="border-2 font-bold" />
+                <Input 
+                  type="number" 
+                  value={backtestDays} 
+                  onChange={(e) => setBacktestDays(Number(e.target.value))} 
+                  className="border-2 font-bold" 
+                />
               </div>
               <div className="space-y-2">
                 <Label className="text-label">BUY %</Label>
-                <Input type="number" id="backtest-buy" defaultValue="2" step="0.5" className="border-2 font-bold" />
+                <Input 
+                  type="number" 
+                  value={backtestBuy} 
+                  onChange={(e) => setBacktestBuy(Number(e.target.value))} 
+                  step="0.5" 
+                  className="border-2 font-bold" 
+                />
               </div>
               <div className="space-y-2">
                 <Label className="text-label">SELL %</Label>
-                <Input type="number" id="backtest-sell" defaultValue="3" step="0.5" className="border-2 font-bold" />
+                <Input 
+                  type="number" 
+                  value={backtestSell} 
+                  onChange={(e) => setBacktestSell(Number(e.target.value))} 
+                  step="0.5" 
+                  className="border-2 font-bold" 
+                />
               </div>
             </div>
             <Button 
               className="w-full h-10 font-bold"
               disabled={isLoading}
-              onClick={async () => {
-                setIsLoading(true);
-                try {
-                  const symbolInput = (document.getElementById('backtest-symbol') as HTMLInputElement)?.value || 'SPY';
-                  const daysInput = parseInt((document.getElementById('backtest-days') as HTMLInputElement)?.value || '30');
-                  const buyThreshold = (document.getElementById('backtest-buy') as HTMLInputElement)?.value || '2';
-                  const sellThreshold = (document.getElementById('backtest-sell') as HTMLInputElement)?.value || '3';
-                  const endDate = new Date();
-                  const startDate = new Date();
-                  startDate.setDate(startDate.getDate() - daysInput);
-                  const { data, error } = await supabase.functions.invoke('run-backtest', {
-                    body: { symbol: symbolInput, startDate: startDate.toISOString().split('T')[0], endDate: endDate.toISOString().split('T')[0], buyThreshold, sellThreshold, initialCapital: STARTING_CAPITAL }
-                  });
-                  if (error) throw error;
-                  const result = data.result;
-                  toast({ title: `BACKTEST: ${symbolInput} | ${result.return_percentage?.toFixed(2) || 0}% | WIN: ${result.win_rate?.toFixed(1) || 0}%` });
-                } catch (err) {
-                  toast({ title: "BACKTEST ERROR", variant: "destructive" });
-                } finally {
-                  setIsLoading(false);
-                }
-              }}
+              onClick={runBacktest}
             >
               {isLoading ? 'RUNNING...' : 'RUN BACKTEST'}
             </Button>
