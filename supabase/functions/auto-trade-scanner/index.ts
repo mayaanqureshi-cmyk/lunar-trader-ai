@@ -446,37 +446,64 @@ CRITERIA:
 - Look for confluence: Multiple ICT concepts aligning = higher probability
 - Strong trends with clear market structure`;
 
-  const [gpt4Response, gptMiniResponse] = await Promise.all([
-    fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${openaiApiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: 'You are an expert ICT (Inner Circle Trader) and Smart Money Concepts trader. Analyze charts for Order Blocks, Fair Value Gaps, Liquidity Sweeps, and Market Structure. Return only valid JSON.' },
-          { role: 'user', content: aiPrompt }
-        ]
-      })
-    }),
-    fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${openaiApiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: 'You are an expert ICT (Inner Circle Trader) and Smart Money Concepts trader. Analyze charts for Order Blocks, Fair Value Gaps, Liquidity Sweeps, and Market Structure. Return only valid JSON.' },
-          { role: 'user', content: aiPrompt }
-        ]
-      })
-    })
-  ]);
-
-  if (!gpt4Response.ok || !gptMiniResponse.ok) {
-    throw new Error(`AI analysis failed: GPT-4o ${gpt4Response.status}, GPT-4o-mini ${gptMiniResponse.status}`);
+  // AI Analysis with retry logic for rate limiting
+  async function fetchWithRetry(model: string, maxRetries = 3): Promise<any> {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${openaiApiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: 'system', content: 'You are an expert ICT (Inner Circle Trader) and Smart Money Concepts trader. Analyze charts for Order Blocks, Fair Value Gaps, Liquidity Sweeps, and Market Structure. Return only valid JSON.' },
+              { role: 'user', content: aiPrompt }
+            ]
+          })
+        });
+        
+        if (response.status === 429) {
+          const waitTime = Math.pow(2, attempt) * 1000;
+          console.log(`⏳ Rate limited on ${model}, waiting ${waitTime/1000}s (attempt ${attempt}/${maxRetries})`);
+          await new Promise(r => setTimeout(r, waitTime));
+          continue;
+        }
+        
+        if (!response.ok) {
+          throw new Error(`${model} returned ${response.status}`);
+        }
+        
+        return await response.json();
+      } catch (e) {
+        if (attempt === maxRetries) throw e;
+        console.log(`⚠️ ${model} attempt ${attempt} failed, retrying...`);
+        await new Promise(r => setTimeout(r, 1000 * attempt));
+      }
+    }
+    return null;
   }
 
-  const gpt4Data = await gpt4Response.json();
-  const gptMiniData = await gptMiniResponse.json();
+  // Fetch sequentially to avoid rate limits
+  let gpt4Data: any = null;
+  let gptMiniData: any = null;
+  
+  try {
+    gpt4Data = await fetchWithRetry('gpt-4o');
+  } catch (e) {
+    console.error('⚠️ GPT-4o failed after retries:', e);
+  }
+  
+  await new Promise(r => setTimeout(r, 500)); // Small delay between models
+  
+  try {
+    gptMiniData = await fetchWithRetry('gpt-4o-mini');
+  } catch (e) {
+    console.error('⚠️ GPT-4o-mini failed after retries:', e);
+  }
+  
+  if (!gpt4Data && !gptMiniData) {
+    throw new Error('Both AI models failed - skipping this scan');
+  }
 
   // Safely parse AI responses with error handling
   let gpt4Recs: any[] = [];
