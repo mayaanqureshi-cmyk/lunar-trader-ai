@@ -40,6 +40,17 @@ interface BacktestResult {
   max_drawdown: number;
 }
 
+// Market regime types
+type MarketRegime = 'BULL' | 'BEAR' | 'CHOPPY';
+
+interface RegimeConfig {
+  confidenceMultiplier: number;
+  positionSizeMultiplier: number;
+  stopLossMultiplier: number;
+  takeProfitMultiplier: number;
+  minConfidence: number;
+}
+
 // ============= CACHE MANAGEMENT =============
 const indicatorCache = new Map<string, CachedIndicators>();
 const CACHE_TTL_MS = 60 * 1000;
@@ -102,8 +113,8 @@ const SECTOR_MAP: Record<string, string> = {
 // ============= BALANCED RISK CONFIGURATION =============
 // Moderately conservative settings for quality trades
 const RISK_CONFIG = {
-  baseStopLossPercent: 4,        // Wider stops to avoid premature exits
-  baseTakeProfitPercent: 10,     // Higher profit targets
+  baseStopLossPercent: 4,        // Base stop - will be ATR-adjusted
+  baseTakeProfitPercent: 10,     // Base target - will be ATR-adjusted
   confidenceThreshold: 0.68,     // Moderate confidence threshold
   minTechnicalScore: 6.5,        // Moderate technical score required
   maxSectorExposure: 0.5,        // Allow more sector exposure
@@ -112,7 +123,194 @@ const RISK_CONFIG = {
   maxPositions: 6,               // Allow more positions
   minRiskRewardRatio: 2.0,       // Moderate risk/reward ratio
   cooldownMinutes: 30,           // Shorter cooldown between trades
+  // ATR-based risk management
+  atrStopMultiplier: 2.0,        // Stop loss = ATR * multiplier
+  atrTakeProfitMultiplier: 4.0,  // Take profit = ATR * multiplier  
+  targetRiskPercent: 1.0,        // Target 1% portfolio risk per trade
 };
+
+// ============= MARKET REGIME CONFIGURATION =============
+const REGIME_CONFIGS: Record<MarketRegime, RegimeConfig> = {
+  BULL: {
+    confidenceMultiplier: 1.0,
+    positionSizeMultiplier: 1.2,    // Larger positions in bull market
+    stopLossMultiplier: 1.2,        // Wider stops to let winners run
+    takeProfitMultiplier: 1.3,      // Higher targets in trending market
+    minConfidence: 0.65,
+  },
+  BEAR: {
+    confidenceMultiplier: 1.2,      // Require higher confidence in bear
+    positionSizeMultiplier: 0.6,    // Smaller positions, more defensive
+    stopLossMultiplier: 0.8,        // Tighter stops to limit losses
+    takeProfitMultiplier: 0.8,      // Lower targets, take profits faster
+    minConfidence: 0.75,
+  },
+  CHOPPY: {
+    confidenceMultiplier: 1.1,
+    positionSizeMultiplier: 0.8,    // Moderate positions
+    stopLossMultiplier: 0.9,        // Slightly tighter stops
+    takeProfitMultiplier: 0.9,      // Lower targets for range-bound
+    minConfidence: 0.70,
+  }
+};
+
+// ============= MARKET REGIME DETECTION =============
+function detectMarketRegime(technicalData: Record<string, any>): { regime: MarketRegime; confidence: number; details: string } {
+  // Analyze SPY and QQQ as market proxies
+  const spyData = technicalData['SPY'] || technicalData.technicalData?.['SPY'];
+  const qqqData = technicalData['QQQ'] || technicalData.technicalData?.['QQQ'];
+  
+  if (!spyData && !qqqData) {
+    return { regime: 'CHOPPY', confidence: 0.5, details: 'No market proxy data available' };
+  }
+  
+  const data = spyData || qqqData;
+  const rsi = data.rsi || 50;
+  const macd = data.macd || 0;
+  const macdSignal = data.macd_signal || 0;
+  const sma20 = data.sma_20 || data.close;
+  const sma50 = data.sma_50 || data.close;
+  const close = data.close;
+  const atr = data.atr || 0;
+  const atrPercent = (atr / close) * 100;
+  
+  let bullScore = 0;
+  let bearScore = 0;
+  
+  // Price vs MAs
+  if (close > sma20) bullScore += 2; else bearScore += 2;
+  if (close > sma50) bullScore += 2; else bearScore += 2;
+  if (sma20 > sma50) bullScore += 1; else bearScore += 1;
+  
+  // RSI analysis
+  if (rsi > 60) bullScore += 2;
+  else if (rsi > 50) bullScore += 1;
+  else if (rsi < 40) bearScore += 2;
+  else if (rsi < 50) bearScore += 1;
+  
+  // MACD analysis
+  if (macd > macdSignal && macd > 0) bullScore += 2;
+  else if (macd > macdSignal) bullScore += 1;
+  else if (macd < macdSignal && macd < 0) bearScore += 2;
+  else if (macd < macdSignal) bearScore += 1;
+  
+  // Volatility - high ATR suggests choppy/uncertain
+  const isHighVolatility = atrPercent > 2.5;
+  
+  const totalScore = bullScore + bearScore;
+  const bullPct = bullScore / totalScore;
+  const bearPct = bearScore / totalScore;
+  
+  let regime: MarketRegime;
+  let confidence: number;
+  let details: string;
+  
+  if (isHighVolatility && Math.abs(bullPct - bearPct) < 0.2) {
+    regime = 'CHOPPY';
+    confidence = 0.6 + (atrPercent / 10);
+    details = `High volatility (ATR ${atrPercent.toFixed(1)}%), mixed signals`;
+  } else if (bullPct > 0.65) {
+    regime = 'BULL';
+    confidence = bullPct;
+    details = `Bullish trend: Price above MAs, RSI ${rsi.toFixed(0)}, MACD positive`;
+  } else if (bearPct > 0.65) {
+    regime = 'BEAR';
+    confidence = bearPct;
+    details = `Bearish trend: Price below MAs, RSI ${rsi.toFixed(0)}, MACD negative`;
+  } else {
+    regime = 'CHOPPY';
+    confidence = 1 - Math.abs(bullPct - bearPct);
+    details = `Mixed signals: Bull ${(bullPct*100).toFixed(0)}% vs Bear ${(bearPct*100).toFixed(0)}%`;
+  }
+  
+  console.log(`📊 Market Regime: ${regime} (${(confidence*100).toFixed(0)}% confidence)`);
+  console.log(`   ${details}`);
+  
+  return { regime, confidence, details };
+}
+
+// ============= ATR-BASED RISK CALCULATIONS =============
+function calculateATRStopLoss(
+  currentPrice: number,
+  atr: number,
+  regime: MarketRegime
+): { stopLossPercent: number; stopLossPrice: number } {
+  const regimeConfig = REGIME_CONFIGS[regime];
+  
+  // ATR-based stop: wider for low volatility, tighter for high volatility
+  // Minimum stop is based on ATR multiplied by regime factor
+  const atrStop = (atr / currentPrice) * 100 * RISK_CONFIG.atrStopMultiplier * regimeConfig.stopLossMultiplier;
+  
+  // Floor and ceiling for stops
+  const minStop = 2.0;  // Never less than 2%
+  const maxStop = 8.0;  // Never more than 8%
+  
+  const stopLossPercent = Math.max(minStop, Math.min(maxStop, atrStop));
+  const stopLossPrice = currentPrice * (1 - stopLossPercent / 100);
+  
+  return { stopLossPercent, stopLossPrice };
+}
+
+function calculateATRTakeProfit(
+  currentPrice: number,
+  atr: number,
+  stopLossPercent: number,
+  regime: MarketRegime
+): { takeProfitPercent: number; takeProfitPrice: number; riskReward: number } {
+  const regimeConfig = REGIME_CONFIGS[regime];
+  
+  // ATR-based take profit, adjusted for regime
+  const atrTarget = (atr / currentPrice) * 100 * RISK_CONFIG.atrTakeProfitMultiplier * regimeConfig.takeProfitMultiplier;
+  
+  // Ensure minimum risk/reward ratio
+  const minTakeProfit = stopLossPercent * RISK_CONFIG.minRiskRewardRatio;
+  const maxTakeProfit = 15.0; // Cap at 15%
+  
+  const takeProfitPercent = Math.max(minTakeProfit, Math.min(maxTakeProfit, atrTarget));
+  const takeProfitPrice = currentPrice * (1 + takeProfitPercent / 100);
+  const riskReward = takeProfitPercent / stopLossPercent;
+  
+  return { takeProfitPercent, takeProfitPrice, riskReward };
+}
+
+// ============= VOLATILITY-ADJUSTED POSITION SIZING =============
+function calculateVolatilityAdjustedSize(
+  portfolioValue: number,
+  currentPrice: number,
+  atr: number,
+  stopLossPercent: number,
+  regime: MarketRegime,
+  confidence: number,
+  aiConsensus: string
+): { positionSize: number; shares: number; riskAmount: number } {
+  const regimeConfig = REGIME_CONFIGS[regime];
+  
+  // Target risk per trade (e.g., 1% of portfolio)
+  const baseRiskAmount = portfolioValue * (RISK_CONFIG.targetRiskPercent / 100);
+  
+  // Adjust risk based on regime
+  const adjustedRiskAmount = baseRiskAmount * regimeConfig.positionSizeMultiplier;
+  
+  // ATR-based position sizing: Risk Amount / (ATR * multiplier)
+  // This equalizes risk across different volatility levels
+  const atrDollarRisk = atr * RISK_CONFIG.atrStopMultiplier;
+  let shares = adjustedRiskAmount / atrDollarRisk;
+  
+  // Apply confidence multiplier
+  if (confidence > 0.80) shares *= 1.2;
+  else if (confidence > 0.75) shares *= 1.1;
+  
+  // AI consensus bonus
+  if (aiConsensus.includes('CONSENSUS')) shares *= 1.15;
+  
+  const positionSize = shares * currentPrice;
+  const riskAmount = shares * currentPrice * (stopLossPercent / 100);
+  
+  console.log(`📐 Position Size: $${positionSize.toFixed(2)} (${shares.toFixed(3)} shares)`);
+  console.log(`   Risk: $${riskAmount.toFixed(2)} (${(riskAmount/portfolioValue*100).toFixed(2)}% of portfolio)`);
+  
+  return { positionSize, shares, riskAmount };
+}
 
 // ============= HELPER FUNCTIONS =============
 function isLondonKillZone(): { active: boolean; session: string } {
@@ -522,61 +720,76 @@ serve(async (req) => {
     const currentPositions = await positionsResponse.json();
     console.log(`📊 Current positions: ${currentPositions.length}`);
 
-    // ADVANCED EXIT LOGIC: Trailing stops, partial profit-taking, momentum-based exits
+    // ADVANCED EXIT LOGIC: ATR-based trailing stops with regime awareness
     const sellsExecuted = [];
     let remainingBuyingPower = buyingPower * 0.9;
     
+    // Detect market regime FIRST
+    const marketRegime = detectMarketRegime(technicalData);
+    const regimeConfig = REGIME_CONFIGS[marketRegime.regime];
+    
+    console.log(`🎯 Market Regime: ${marketRegime.regime} | Adjusting strategy...`);
+    console.log(`   Position size: ${(regimeConfig.positionSizeMultiplier * 100).toFixed(0)}%`);
+    console.log(`   Stop multiplier: ${regimeConfig.stopLossMultiplier}x`);
+    console.log(`   Profit multiplier: ${regimeConfig.takeProfitMultiplier}x`);
+    
     if (currentPositions.length > 0) {
-      console.log('💰 Advanced Exit Strategy: Checking trailing stops & profit targets...');
+      console.log('💰 ATR-Based Exit Strategy: Checking dynamic stops & profit targets...');
       
       for (const pos of currentPositions) {
         const profitPercent = parseFloat(pos.unrealized_plpc) * 100;
         const avgEntry = parseFloat(pos.avg_entry_price);
         const currentPrice = parseFloat(pos.current_price);
-        // Use qty_available to avoid selling shares held in pending orders
         const qty = parseFloat(pos.qty_available || pos.qty);
         const totalQty = parseFloat(pos.qty);
         
-        // Get technical data for momentum indicators
-        const tech = technicalData.technicalData?.[pos.symbol];
+        // Get technical data for ATR and momentum indicators
+        const tech = technicalData.technicalData?.[pos.symbol] || technicalData[pos.symbol];
+        const atr = tech?.atr || (currentPrice * 0.02); // Default 2% ATR if not available
         const rsi = tech?.rsi || 50;
         const macdSignal = tech?.macd_signal || 0;
         
-        // Calculate trailing stop (peak price tracked dynamically)
-        const peakPrice = Math.max(currentPrice, avgEntry * 1.1); // At least 10% above entry
+        // ATR-based dynamic stop loss (adjusted for regime)
+        const atrStopPercent = (atr / currentPrice) * 100 * RISK_CONFIG.atrStopMultiplier * regimeConfig.stopLossMultiplier;
+        const dynamicStopLoss = Math.max(2, Math.min(8, atrStopPercent)); // Clamp 2-8%
+        
+        // Calculate trailing stop based on ATR
+        const peakPrice = Math.max(currentPrice, avgEntry * 1.1);
         const dipFromPeak = ((peakPrice - currentPrice) / peakPrice) * 100;
         
-        console.log(`📊 ${pos.symbol}: Profit ${profitPercent.toFixed(2)}%, Dip ${dipFromPeak.toFixed(2)}%, RSI ${rsi.toFixed(1)}, Available: ${qty}/${totalQty}`);
+        // ATR-based trailing threshold (tighter in bear, looser in bull)
+        const trailingThreshold = dynamicStopLoss * 0.6;
         
-        // Skip if no shares available to sell
+        console.log(`📊 ${pos.symbol}: P/L ${profitPercent.toFixed(2)}%, ATR Stop: ${dynamicStopLoss.toFixed(1)}%, Dip: ${dipFromPeak.toFixed(2)}%`);
+        
         if (qty <= 0) {
-          console.log(`⏭️ Skipping ${pos.symbol}: No shares available (${qty} available, ${totalQty} total - likely in pending orders)`);
+          console.log(`⏭️ Skipping ${pos.symbol}: No shares available`);
           continue;
         }
         
         let sellReason = '';
         let sellQty = qty;
         
-        // EXIT STRATEGY 1: Trailing Stop (>10% profit, 4% dip from peak)
-        if (profitPercent > 10 && dipFromPeak > 4) {
-          sellReason = `Trailing stop: ${profitPercent.toFixed(2)}% profit, ${dipFromPeak.toFixed(2)}% dip from peak`;
-          console.log(`🛑 ${sellReason}`);
+        // EXIT 1: ATR-based trailing stop (profit > 2*ATR stop, dip > ATR threshold)
+        if (profitPercent > dynamicStopLoss * 2 && dipFromPeak > trailingThreshold) {
+          sellReason = `ATR trailing stop: ${profitPercent.toFixed(2)}% profit, ${dipFromPeak.toFixed(2)}% dip (threshold: ${trailingThreshold.toFixed(1)}%)`;
         }
-        // EXIT STRATEGY 2: Partial Profit-Taking at first target (6-8% gain)
-        else if (profitPercent >= 6 && profitPercent < 10 && qty >= 2) {
-          sellQty = Math.floor(qty * 0.5); // Sell 50%
-          sellReason = `Partial profit-taking: ${profitPercent.toFixed(2)}% gain, securing 50% position`;
-          console.log(`💰 ${sellReason}`);
+        // EXIT 2: Partial profit-taking at 1.5x ATR target
+        else if (profitPercent >= dynamicStopLoss * 1.5 && profitPercent < dynamicStopLoss * 3 && qty >= 2) {
+          sellQty = Math.floor(qty * 0.5);
+          sellReason = `ATR profit-taking: ${profitPercent.toFixed(2)}% gain (target: ${(dynamicStopLoss * 1.5).toFixed(1)}%)`;
         }
-        // EXIT STRATEGY 3: Momentum reversal (overbought + negative MACD)
-        else if (profitPercent > 5 && rsi > 75 && macdSignal < 0) {
-          sellReason = `Momentum reversal: RSI overbought (${rsi.toFixed(1)}), MACD bearish`;
-          console.log(`📉 ${sellReason}`);
+        // EXIT 3: Momentum reversal (overbought + negative MACD)
+        else if (profitPercent > dynamicStopLoss && rsi > 75 && macdSignal < 0) {
+          sellReason = `Momentum reversal: RSI ${rsi.toFixed(1)}, MACD bearish`;
         }
-        // EXIT STRATEGY 4: Stop-loss (>5% loss)
-        else if (profitPercent < -5) {
-          sellReason = `Stop-loss triggered: ${profitPercent.toFixed(2)}% loss`;
-          console.log(`🛑 ${sellReason}`);
+        // EXIT 4: ATR-based stop-loss (loss > ATR stop)
+        else if (profitPercent < -dynamicStopLoss) {
+          sellReason = `ATR stop-loss: ${profitPercent.toFixed(2)}% loss (limit: -${dynamicStopLoss.toFixed(1)}%)`;
+        }
+        // EXIT 5: Bear market quick exit (tighter stops)
+        else if (marketRegime.regime === 'BEAR' && profitPercent < -(dynamicStopLoss * 0.7)) {
+          sellReason = `Bear market stop: ${profitPercent.toFixed(2)}% loss (regime-adjusted)`;
         }
         
         if (sellReason) {
@@ -606,18 +819,20 @@ serve(async (req) => {
                 symbol: pos.symbol,
                 orderId: sellOrder.id,
                 reason: sellReason,
-                profitAmount: profitAmount,
-                profitPercent: profitPercent,
+                profitAmount,
+                profitPercent,
                 quantitySold: sellQty,
                 totalQuantity: totalQty,
                 isPartial: sellQty < qty,
-                freedCapital: freedCapital,
+                freedCapital,
                 exitRSI: rsi,
-                exitMACD: macdSignal
+                exitMACD: macdSignal,
+                atrStopPercent: dynamicStopLoss,
+                marketRegime: marketRegime.regime,
               });
               
               remainingBuyingPower += freedCapital;
-              console.log(`✅ Sold ${sellQty}/${qty} shares of ${pos.symbol} for ${profitPercent.toFixed(2)}% profit ($${profitAmount.toFixed(2)})`);
+              console.log(`✅ Sold ${sellQty}/${qty} of ${pos.symbol} (${sellReason})`);
             } else {
               const errorText = await sellResp.text();
               console.error(`❌ Failed to sell ${pos.symbol}:`, errorText);
@@ -629,74 +844,16 @@ serve(async (req) => {
       }
     }
 
-    // AGGRESSIVE PROFIT-FOCUSED RISK MANAGEMENT
-    const baseStopLossPercent = 3; // Wider stops for more breathing room
-    const baseTakeProfitPercent = 8; // Higher profit targets
-    
-    // Sector exposure limits (max 50% in any single sector for aggressive growth)
-    const sectorMap: Record<string, string> = {
-      'AAPL': 'Tech', 'MSFT': 'Tech', 'GOOGL': 'Tech', 'AMZN': 'Tech', 'META': 'Tech', 'NVDA': 'Tech', 'TSLA': 'Auto',
-      'AMD': 'Semiconductors', 'INTC': 'Semiconductors', 'QCOM': 'Semiconductors', 'AVGO': 'Semiconductors',
-      'CRM': 'Software', 'ORCL': 'Software', 'ADBE': 'Software', 'NOW': 'Software', 'PANW': 'Cybersecurity', 'CRWD': 'Cybersecurity',
-      'PLTR': 'AI', 'SNOW': 'Cloud', 'DDOG': 'Cloud', 'NET': 'Cloud', 'ZS': 'Cybersecurity', 'MDB': 'Database',
-      'WMT': 'Retail', 'COST': 'Retail', 'TGT': 'Retail', 'HD': 'Retail', 'NKE': 'Consumer', 'SBUX': 'Consumer',
-      'JPM': 'Finance', 'BAC': 'Finance', 'WFC': 'Finance', 'GS': 'Finance', 'MS': 'Finance', 'V': 'Payments', 'MA': 'Payments', 'PYPL': 'Payments',
-      'JNJ': 'Healthcare', 'UNH': 'Healthcare', 'PFE': 'Pharma', 'ABBV': 'Pharma', 'LLY': 'Pharma', 'TMO': 'Healthcare', 'MRNA': 'Biotech', 'GILD': 'Biotech',
-      'XOM': 'Energy', 'CVX': 'Energy', 'COP': 'Energy', 'SLB': 'Energy', 'EOG': 'Energy',
-      'DIS': 'Media', 'NFLX': 'Media', 'CMCSA': 'Telecom', 'T': 'Telecom', 'VZ': 'Telecom',
-      'BA': 'Aerospace', 'CAT': 'Industrial', 'GE': 'Industrial', 'UPS': 'Transport', 'HON': 'Industrial', 'LMT': 'Defense',
-      'RIVN': 'EV', 'LCID': 'EV', 'NIO': 'EV', 'ENPH': 'CleanEnergy', 'PLUG': 'CleanEnergy',
-      'COIN': 'Crypto', 'MSTR': 'Crypto', 'RIOT': 'Crypto', 'MARA': 'Crypto',
-      'SPY': 'ETF', 'QQQ': 'ETF', 'IWM': 'ETF', 'DIA': 'ETF', 'VTI': 'ETF', 'VOO': 'ETF'
-    };
-    
+    // Use SECTOR_MAP constant instead of duplicating
     const sectorExposure: Record<string, number> = {};
     for (const pos of currentPositions) {
-      const sector = sectorMap[pos.symbol] || 'Other';
+      const sector = SECTOR_MAP[pos.symbol] || 'Other';
       const posValue = parseFloat(pos.market_value);
       sectorExposure[sector] = (sectorExposure[sector] || 0) + posValue;
     }
     
-    // Calculate momentum-adjusted position sizing (AGGRESSIVE) with ATR-based risk
-    const calculatePositionMultiplier = (symbol: string, confidence: number, aiConsensus: string): number => {
-      const tech = technicalData.technicalData?.[symbol];
-      if (!tech) return 1.0;
-      
-      let multiplier = 1.0;
-      
-      // BONUS: AI consensus gets bigger positions
-      if (aiConsensus.includes('CONSENSUS')) multiplier *= 1.3;
-      
-      // BONUS: High confidence gets bigger positions
-      if (confidence > 0.80) multiplier *= 1.2;
-      else if (confidence > 0.75) multiplier *= 1.1;
-      
-      // BONUS: Volume surge = bigger position
-      const volumeRatio = tech.volume_ratio || 1.0;
-      if (volumeRatio > 2.0) multiplier *= 1.2;
-      else if (volumeRatio > 1.5) multiplier *= 1.1;
-      
-      // ATR-BASED DYNAMIC SIZING: Inverse relationship with volatility
-      // Higher ATR = smaller position, Lower ATR = larger position
-      const atr = tech.atr || 0;
-      const price = tech.close || 100;
-      const atrPercent = (atr / price) * 100;
-      
-      // Target: ~1% portfolio risk per trade
-      // If ATR% is 2%, we take smaller position. If ATR% is 0.5%, we take larger.
-      if (atrPercent > 0) {
-        const targetRiskPercent = 1.0;
-        const atrMultiplier = Math.min(2.0, Math.max(0.5, targetRiskPercent / atrPercent));
-        multiplier *= atrMultiplier;
-        console.log(`📊 ${symbol} ATR%: ${atrPercent.toFixed(2)}%, Size multiplier: ${atrMultiplier.toFixed(2)}x`);
-      }
-      
-      // Hard cap for risk management
-      return Math.min(multiplier, 2.0);
-    };
-    
-    // CONSERVATIVE: Fewer, higher-quality positions
-    const maxTrades = Math.min(RISK_CONFIG.maxPositions, 4);
+    // Regime-adjusted position sizing
+    const maxTrades = Math.min(RISK_CONFIG.maxPositions, marketRegime.regime === 'BEAR' ? 3 : 4);
     const existingPositionCount = currentPositions.length;
     const availableSlots = Math.max(0, maxTrades - existingPositionCount);
     const baseAmountPerTrade = (buyingPower * RISK_CONFIG.capitalDeployment) / Math.max(availableSlots, 1);
@@ -760,7 +917,7 @@ serve(async (req) => {
       }
 
       // STRICT Sector diversification check
-      const sector = sectorMap[rec.symbol] || 'Other';
+      const sector = SECTOR_MAP[rec.symbol] || 'Other';
       const currentSectorValue = sectorExposure[sector] || 0;
       const sectorLimit = portfolioValue * RISK_CONFIG.maxSectorExposure;
       
@@ -770,7 +927,7 @@ serve(async (req) => {
       }
 
       // Get current price and technical data
-      const tech = technicalData.technicalData?.[rec.symbol];
+      const tech = technicalData.technicalData?.[rec.symbol] || technicalData[rec.symbol];
       if (!tech) {
         console.log(`⚠️ No technical data for ${rec.symbol}, skipping`);
         continue;
@@ -779,6 +936,7 @@ serve(async (req) => {
       const currentPrice = tech.close;
       const high = tech.high;
       const low = tech.low;
+      const atr = tech.atr || (currentPrice * 0.02); // Default 2% ATR
       const rsi = tech.rsi || 50;
       const macd = tech.macd || 0;
       const macdSignal = tech.macd_signal || 0;
@@ -786,6 +944,13 @@ serve(async (req) => {
       
       // STRICT ENTRY FILTERS - Quality over quantity
       const pricePosition = ((currentPrice - low) / (high - low)) * 100;
+      
+      // Regime-adjusted confidence threshold
+      const adjustedConfidenceThreshold = RISK_CONFIG.confidenceThreshold * regimeConfig.confidenceMultiplier;
+      if (rec.confidence < adjustedConfidenceThreshold) {
+        console.log(`⏭️ ${rec.symbol}: Confidence ${(rec.confidence * 100).toFixed(0)}% < ${(adjustedConfidenceThreshold * 100).toFixed(0)}% (regime-adjusted)`);
+        continue;
+      }
       
       // 1. RSI must be in favorable range (not overbought)
       if (rsi > 70) {
@@ -817,39 +982,47 @@ serve(async (req) => {
         continue;
       }
       
-      // CONSERVATIVE POSITION SIZING - quality over quantity
-      const positionMultiplier = calculatePositionMultiplier(rec.symbol, rec.confidence, rec.aiConsensus);
+      // ========== ATR-BASED DYNAMIC STOP LOSS & TAKE PROFIT ==========
+      const { stopLossPercent, stopLossPrice } = calculateATRStopLoss(currentPrice, atr, marketRegime.regime);
+      const { takeProfitPercent, takeProfitPrice, riskReward } = calculateATRTakeProfit(
+        currentPrice, atr, stopLossPercent, marketRegime.regime
+      );
+      
+      // CHECK RISK/REWARD RATIO
+      if (riskReward < RISK_CONFIG.minRiskRewardRatio) {
+        console.log(`⏭️ ${rec.symbol}: Poor risk/reward (${riskReward.toFixed(2)} < ${RISK_CONFIG.minRiskRewardRatio})`);
+        continue;
+      }
+      
+      // ========== VOLATILITY-ADJUSTED POSITION SIZING ==========
+      const { positionSize, shares, riskAmount } = calculateVolatilityAdjustedSize(
+        portfolioValue,
+        currentPrice,
+        atr,
+        stopLossPercent,
+        marketRegime.regime,
+        rec.confidence,
+        rec.aiConsensus
+      );
+      
+      // Apply sector and buying power limits
       const adjustedAmount = Math.min(
-        baseAmountPerTrade * positionMultiplier,
+        positionSize,
         remainingBuyingPower,
         sectorLimit - currentSectorValue
       );
       
-      if (adjustedAmount < 1) {
-        console.log(`⚠️ Insufficient funds for ${rec.symbol} after adjustments`);
-        continue;
-      }
-
-      // DYNAMIC STOP-LOSS based on volatility
-      const volatilityPercent = ((high - low) / currentPrice) * 100;
-      const adjustedStopLoss = Math.max(RISK_CONFIG.baseStopLossPercent, volatilityPercent * 0.6);
-      const adjustedTakeProfit = RISK_CONFIG.baseTakeProfitPercent;
-      
-      // CHECK RISK/REWARD RATIO - must meet minimum
-      const riskRewardRatio = adjustedTakeProfit / adjustedStopLoss;
-      if (riskRewardRatio < RISK_CONFIG.minRiskRewardRatio) {
-        console.log(`⏭️ ${rec.symbol}: Poor risk/reward (${riskRewardRatio.toFixed(2)} < ${RISK_CONFIG.minRiskRewardRatio})`);
+      if (adjustedAmount < 100) {
+        console.log(`⚠️ Insufficient funds for ${rec.symbol} after adjustments ($${adjustedAmount.toFixed(2)})`);
         continue;
       }
       
-      const stopLossPrice = currentPrice * (1 - adjustedStopLoss / 100);
-      const takeProfitPrice = currentPrice * (1 + adjustedTakeProfit / 100);
       const estimatedShares = adjustedAmount / currentPrice;
 
-      console.log(`🎯 QUALITY ENTRY: ${rec.symbol} $${adjustedAmount.toFixed(2)} (~${estimatedShares.toFixed(3)} shares) @ $${currentPrice.toFixed(2)}`);
-      console.log(`   💰 Multiplier: ${positionMultiplier.toFixed(2)}x | ${rec.aiConsensus} | Confidence: ${(rec.confidence * 100).toFixed(0)}%`);
-      console.log(`   📊 RSI: ${rsi.toFixed(1)} | Volume: ${volumeRatio.toFixed(1)}x | Position: ${pricePosition.toFixed(0)}%`);
-      console.log(`   🎯 Target: $${takeProfitPrice.toFixed(2)} (+${adjustedTakeProfit}%) | Stop: $${stopLossPrice.toFixed(2)} (-${adjustedStopLoss.toFixed(1)}%) | R:R ${riskRewardRatio.toFixed(2)}`);
+      console.log(`🎯 ATR ENTRY: ${rec.symbol} $${adjustedAmount.toFixed(2)} (~${estimatedShares.toFixed(3)} shares) @ $${currentPrice.toFixed(2)}`);
+      console.log(`   📊 Regime: ${marketRegime.regime} | ATR: $${atr.toFixed(2)} (${((atr/currentPrice)*100).toFixed(1)}%)`);
+      console.log(`   🎯 Stop: $${stopLossPrice.toFixed(2)} (-${stopLossPercent.toFixed(1)}%) | Target: $${takeProfitPrice.toFixed(2)} (+${takeProfitPercent.toFixed(1)}%)`);
+      console.log(`   💰 Risk: $${riskAmount.toFixed(2)} | R:R ${riskReward.toFixed(2)} | Confidence: ${(rec.confidence * 100).toFixed(0)}%`);
 
       // ========== STRICTER PRE-TRADE BACKTESTING VALIDATION ==========
       console.log(`📊 Running strict backtest validation for ${rec.symbol}...`);
