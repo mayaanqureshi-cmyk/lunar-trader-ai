@@ -478,8 +478,27 @@ CRITERIA:
   const gpt4Data = await gpt4Response.json();
   const gptMiniData = await gptMiniResponse.json();
 
-  const gpt4Recs = JSON.parse(gpt4Data.choices[0].message.content.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
-  const gptMiniRecs = JSON.parse(gptMiniData.choices[0].message.content.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+  // Safely parse AI responses with error handling
+  let gpt4Recs: any[] = [];
+  let gptMiniRecs: any[] = [];
+  
+  try {
+    const gpt4Content = gpt4Data.choices?.[0]?.message?.content?.trim() || '[]';
+    gpt4Recs = JSON.parse(gpt4Content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+    if (!Array.isArray(gpt4Recs)) gpt4Recs = [];
+  } catch (e) {
+    console.error('⚠️ GPT-4o JSON parse error:', e);
+    gpt4Recs = [];
+  }
+  
+  try {
+    const gptMiniContent = gptMiniData.choices?.[0]?.message?.content?.trim() || '[]';
+    gptMiniRecs = JSON.parse(gptMiniContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+    if (!Array.isArray(gptMiniRecs)) gptMiniRecs = [];
+  } catch (e) {
+    console.error('⚠️ GPT-4o-mini JSON parse error:', e);
+    gptMiniRecs = [];
+  }
 
   console.log(`🤖 AI: GPT-4o ${gpt4Recs.length}, GPT-4o-mini ${gptMiniRecs.length} recommendations`);
 
@@ -555,7 +574,7 @@ function calculatePositionMultiplier(
   if (!tech) return 1.0;
   
   let multiplier = 1.0;
-  if (aiConsensus.includes('CONSENSUS')) multiplier *= 1.3;
+  if (aiConsensus?.includes('CONSENSUS')) multiplier *= 1.3;
   if (confidence > 0.80) multiplier *= 1.2;
   else if (confidence > 0.75) multiplier *= 1.1;
   
@@ -563,7 +582,10 @@ function calculatePositionMultiplier(
   if (volumeRatio > 2.0) multiplier *= 1.2;
   else if (volumeRatio > 1.5) multiplier *= 1.1;
   
-  const volatility = ((tech.high - tech.low) / tech.close) * 100;
+  // Safe division - avoid divide by zero
+  const priceRange = (tech.high || 0) - (tech.low || 0);
+  const closePrice = tech.close || 1;
+  const volatility = closePrice > 0 && priceRange > 0 ? (priceRange / closePrice) * 100 : 0;
   if (volatility > 8) multiplier *= 0.8;
   
   return Math.min(multiplier, 1.5);
@@ -844,8 +866,9 @@ serve(async (req) => {
             
             if (sellResp.ok) {
               const sellOrder = await sellResp.json();
-              const profitAmount = parseFloat(pos.unrealized_pl) * (sellQty / totalQty);
-              const freedCapital = parseFloat(pos.market_value) * (sellQty / totalQty);
+              const sellRatio = totalQty > 0 ? sellQty / totalQty : 1;
+              const profitAmount = parseFloat(pos.unrealized_pl || '0') * sellRatio;
+              const freedCapital = parseFloat(pos.market_value || '0') * sellRatio;
               
               sellsExecuted.push({
                 symbol: pos.symbol,
@@ -976,7 +999,8 @@ serve(async (req) => {
       const volumeRatio = tech.volume_ratio || 1;
       
       // STRICT ENTRY FILTERS - Quality over quantity
-      const pricePosition = ((currentPrice - low) / (high - low)) * 100;
+      const priceRange = (high || 0) - (low || 0);
+      const pricePosition = priceRange > 0 ? ((currentPrice - low) / priceRange) * 100 : 50;
       
       // Regime-adjusted confidence threshold
       const adjustedConfidenceThreshold = RISK_CONFIG.confidenceThreshold * regimeConfig.confidenceMultiplier;
@@ -1010,7 +1034,7 @@ serve(async (req) => {
       }
       
       // 5. Don't chase extreme moves - avoid buying at very top of range
-      if (pricePosition > 90) {
+      if (!isNaN(pricePosition) && pricePosition > 90) {
         console.log(`⏭️ ${rec.symbol}: Near top of range (${pricePosition.toFixed(0)}% > 90%)`);
         continue;
       }
