@@ -233,26 +233,41 @@ Focus on identifying:
 
 Rank stocks by probability of significant move (>15%) in next 2-4 weeks.`;
 
-    const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: 'You are an expert technical analyst specializing in multi-timeframe analysis.' },
-          { role: 'user', content: aiPrompt }
-        ],
-      }),
-    });
-    
-    if (!aiResponse.ok) {
-      throw new Error(`AI analysis failed: ${aiResponse.status}`);
+    // Fetch with retry for rate limiting
+    async function fetchWithRetry(maxRetries = 3): Promise<any> {
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${OPENAI_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: [
+              { role: 'system', content: 'You are an expert technical analyst specializing in multi-timeframe analysis.' },
+              { role: 'user', content: aiPrompt }
+            ],
+          }),
+        });
+        
+        if (response.status === 429) {
+          const waitTime = Math.pow(2, attempt) * 1000;
+          console.log(`⏳ Rate limited, waiting ${waitTime/1000}s (attempt ${attempt}/${maxRetries})`);
+          await new Promise(r => setTimeout(r, waitTime));
+          continue;
+        }
+        
+        if (!response.ok) {
+          throw new Error(`AI analysis failed: ${response.status}`);
+        }
+        
+        return await response.json();
+      }
+      throw new Error('AI analysis failed after max retries');
     }
     
-    const aiData = await aiResponse.json();
+    const aiData = await fetchWithRetry();
     const analysis = aiData.choices[0].message.content;
     
     return new Response(
