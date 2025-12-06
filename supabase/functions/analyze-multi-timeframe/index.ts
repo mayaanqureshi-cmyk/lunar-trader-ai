@@ -233,8 +233,8 @@ Focus on identifying:
 
 Rank stocks by probability of significant move (>15%) in next 2-4 weeks.`;
 
-    // Fetch with retry for rate limiting
-    async function fetchWithRetry(maxRetries = 3): Promise<any> {
+    // Fetch with retry for rate limiting - longer waits for OpenAI rate limits
+    async function fetchWithRetry(maxRetries = 5): Promise<any> {
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
@@ -252,13 +252,16 @@ Rank stocks by probability of significant move (>15%) in next 2-4 weeks.`;
         });
         
         if (response.status === 429) {
-          const waitTime = Math.pow(2, attempt) * 1000;
+          // Longer waits: 10s, 20s, 40s, 60s, 60s
+          const waitTime = Math.min(Math.pow(2, attempt) * 5000, 60000);
           console.log(`⏳ Rate limited, waiting ${waitTime/1000}s (attempt ${attempt}/${maxRetries})`);
           await new Promise(r => setTimeout(r, waitTime));
           continue;
         }
         
         if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`AI error ${response.status}: ${errorText}`);
           throw new Error(`AI analysis failed: ${response.status}`);
         }
         
