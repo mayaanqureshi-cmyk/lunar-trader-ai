@@ -446,8 +446,8 @@ CRITERIA:
 - Look for confluence: Multiple ICT concepts aligning = higher probability
 - Strong trends with clear market structure`;
 
-  // AI Analysis with retry logic for rate limiting
-  async function fetchWithRetry(model: string, maxRetries = 3): Promise<any> {
+  // AI Analysis with retry logic for rate limiting - longer waits
+  async function fetchWithRetry(model: string, maxRetries = 5): Promise<any> {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -463,13 +463,16 @@ CRITERIA:
         });
         
         if (response.status === 429) {
-          const waitTime = Math.pow(2, attempt) * 1000;
+          // Longer waits: 10s, 20s, 40s, 60s, 60s
+          const waitTime = Math.min(Math.pow(2, attempt) * 5000, 60000);
           console.log(`⏳ Rate limited on ${model}, waiting ${waitTime/1000}s (attempt ${attempt}/${maxRetries})`);
           await new Promise(r => setTimeout(r, waitTime));
           continue;
         }
         
         if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`${model} error ${response.status}: ${errorText}`);
           throw new Error(`${model} returned ${response.status}`);
         }
         
@@ -477,7 +480,7 @@ CRITERIA:
       } catch (e) {
         if (attempt === maxRetries) throw e;
         console.log(`⚠️ ${model} attempt ${attempt} failed, retrying...`);
-        await new Promise(r => setTimeout(r, 1000 * attempt));
+        await new Promise(r => setTimeout(r, 2000 * attempt));
       }
     }
     return null;
