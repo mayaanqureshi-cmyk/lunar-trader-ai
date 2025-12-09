@@ -3,10 +3,10 @@ import { Header } from "@/components/Header";
 import { supabase } from "@/integrations/supabase/client";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Send, ChevronDown, ChevronUp } from "lucide-react";
+import { AdvancedBacktesting } from "@/components/AdvancedBacktesting";
 
 type TimeRange = 'today' | 'week' | 'month' | 'all';
-type Tab = 'performance' | 'orders' | 'strategy';
-
+type Tab = 'performance' | 'orders' | 'strategy' | 'backtest';
 interface PerformanceData {
   portfolioValue: number;
   totalPL: number;
@@ -299,7 +299,7 @@ const Index = () => {
       <main className="container mx-auto px-6 py-12 max-w-3xl">
         {/* Tab Toggle */}
         <div className="flex gap-1 mb-10 border border-border inline-flex">
-          {(['performance', 'orders', 'strategy'] as Tab[]).map((t) => (
+          {(['performance', 'orders', 'strategy', 'backtest'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -502,7 +502,7 @@ const Index = () => {
               </div>
             )}
           </div>
-        ) : (
+        ) : tab === 'strategy' ? (
           /* Strategy Tab */
           <div className="space-y-10">
             {/* Overview */}
@@ -543,6 +543,11 @@ const Index = () => {
                 ))}
               </ul>
             </div>
+          </div>
+        ) : (
+          /* Backtest Tab */
+          <div className="max-w-5xl mx-auto -mx-6">
+            <AdvancedBacktesting />
           </div>
         )}
       </main>

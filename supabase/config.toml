@@ -1,5 +1,8 @@
 project_id = "ysixqjvungxjrnpqbdzd"
 
+[functions.advanced-backtest]
+verify_jwt = false
+
 [functions.parse-stock-input]
 verify_jwt = false
 
